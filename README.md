@@ -6351,6 +6351,1655 @@ public String searchException(String line) {
 
 ---------------------------------
 
+HOme work............................................
+
+SparkDemo
+package com.infy.gs.automation.client;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+/** Java Bean class to be used with the example JavaSqlNetworkWordCount. */
+public class JavaRecord implements java.io.Serializable {
+	private String alertId;
+	private String jobName;
+	private String description;
+	private String timestamp;
+	public String getAlertId() {
+		return alertId;
+	}
+	public void setAlertId(String alertId) {
+		this.alertId = alertId;
+	}
+	public String getJobName() {
+		return jobName;
+	}
+	public void setJobName(String jobName) {
+		this.jobName = jobName;
+	}
+	public String getDescription() {
+		return description;
+	}
+	public void setDescription(String description) {
+		this.description = description;
+	}
+	public String getTimestamp() {
+		return timestamp;
+	}
+	public void setTimestamp(String timestamp) {
+		this.timestamp = timestamp;
+	}
+}
+package com.infy.gs.automation.client;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+import com.google.common.collect.Lists;
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.api.java.StorageLevels;
+import org.apache.spark.streaming.Durations;
+import org.apache.spark.streaming.Time;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+
+import scala.Tuple2;
+
+/**
+ * Use DataFrames and SQL to count words in UTF8 encoded, '\n' delimited text received from the
+ * network every second.
+ *
+ * Usage: JavaSqlNetworkWordCount <hostname> <port>
+ * <hostname> and <port> describe the TCP server that Spark Streaming would connect to receive data.
+ *
+ * To run this on your local machine, you need to first run a Netcat server
+ *    `$ nc -lk 9999`
+ * and then run the example
+ *    `$ bin/run-example org.apache.spark.examples.streaming.JavaSqlNetworkWordCount localhost 9999`
+ */
+
+public final class JavaSqlDataFrame {
+  private static final Pattern SPACE = Pattern.compile(" ");
+
+  public static void main(String[] args) {
+/*    if (args.length < 2) {
+      System.err.println("Usage: JavaNetworkWordCount <hostname> <port>");
+      System.exit(1);
+    }
+*/
+	  long durationInMilliSec = 30000;
+      Map<String,Integer> topicMap = new HashMap<String,Integer>();
+      String[] topic = "test,".split(",");
+      for(String t: topic)
+      {
+          topicMap.put("test", new Integer(1));
+      }
+    
+
+    // Create the context with a 1 second batch size
+    SparkConf sparkConf = new SparkConf().setAppName("JavaSqlNetworkWordCount").setMaster("local[2]").set("spark.driver.allowMultipleContexts", "true").set("spark.driver.host","zeus07").set("spark.driver.port","8080");
+    JavaStreamingContext ssc = new JavaStreamingContext(sparkConf, Durations.seconds(3));
+
+    // Create a JavaReceiverInputDStream on target ip:port and count the
+    // words in input stream of \n delimited text (eg. generated by 'nc')
+    // Note that no duplication in storage level only for running locally.
+    // Replication necessary in distributed scenario for fault tolerance.
+    //JavaReceiverInputDStream<String> lines = ssc.socketTextStream("Zeus07", 8080, StorageLevels.MEMORY_AND_DISK_SER);
+    
+    JavaPairReceiverInputDStream<String, String> messages = KafkaUtils.createStream(ssc, "127.0.0.1:2181","test-consumer-group", topicMap );
+    /*JavaDStream<String> words = messages.flatMap(new FlatMapFunction<String, String>() {
+      @Override
+      public Iterable<String> call(String x) {
+        return Lists.newArrayList(SPACE.split(x));
+      }
+    });
+    */
+    JavaDStream<String> data = messages.map(new Function<Tuple2<String, String>, String>() 
+            {
+                public String call(Tuple2<String, String> message)
+                {
+                    return message._2();
+                }
+            }
+      );
+
+data.print();
+
+
+
+    // Convert RDDs of the words DStream to DataFrame and run SQL query
+    data.foreachRDD(new Function2<JavaRDD<String>, Time, Void>() {
+      @Override
+      public Void call(JavaRDD<String> rdd, Time time) {
+        SQLContext sqlContext = JavaSQLContextSingleton.getInstance(rdd.context());
+
+        // Convert JavaRDD[String] to JavaRDD[bean class] to DataFrame
+        JavaRDD<JavaRecord> rowRDD = rdd.map(new Function<String, JavaRecord>() {
+          public JavaRecord call(String word) {
+            JavaRecord record = new JavaRecord();
+            //record.setWord(word);
+            
+               	String[] xr = word.split(",");
+		    	
+		    	String alertids[] = xr[0].split(":");
+		    	String alertId = alertids[1];
+		    	
+		    	String jobNames[]=xr[1].split(":");
+		    	String jobName=jobNames[1];
+		    	
+		    	String desc[]=xr[2].split(":");
+		    	String description=desc[1];
+		    	
+		    	String timestamps[]=xr[3].split(":");
+		    	String dtimestamp=timestamps[1];
+		    	
+		    	record.setAlertId(alertId);
+		    	record.setJobName(jobName);
+		    	record.setDescription(description);
+		    	record.setTimestamp(dtimestamp);
+		    	
+		    	System.out.println("Connection object++++++++++++++"+record);
+			
+
+            
+            return record;
+          }
+        });
+        DataFrame wordsDataFrame = sqlContext.createDataFrame(rowRDD, JavaRecord.class);
+
+        // Register as table
+        wordsDataFrame.registerTempTable("alerts");
+
+        // Do word count on table using SQL and print it
+        DataFrame wordCountsDataFrame =
+         //   sqlContext.sql("select word, count(*) as total from alerts");
+        		
+        		sqlContext.sql("SELECT timestamp FROM alerts WHERE jobName = 'CHOG_JOB_NOS'");
+        System.out.println("========= " + time + "=========");
+        wordCountsDataFrame.show();
+        return null;
+      }
+    });
+
+    ssc.start();
+    ssc.awaitTermination();
+  }
+}
+
+/** Lazily instantiated singleton instance of SQLContext */
+class JavaSQLContextSingleton {
+  static private transient SQLContext instance = null;
+  static public SQLContext getInstance(SparkContext sparkContext) {
+    if (instance == null) {
+      instance = new SQLContext(sparkContext);
+    }
+    return instance;
+  }
+}
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>SparkDemo</groupId>
+	<artifactId>SparkDemo</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<build>
+		<sourceDirectory>src</sourceDirectory>
+		<plugins>
+			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.1</version>
+				<configuration>
+					<source>1.8</source>
+					<target>1.8</target>
+				</configuration>
+			</plugin>
+      			 <plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.2.1</version>
+				<executions>
+					<execution>
+						<id>gs-poc</id>
+						<phase>test</phase>
+						<goals>
+							<goal>java</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<mainClass>com.infy.gs.automation.client.JavaSqlDataFrame</mainClass>
+					<executable>java</executable>
+					<arguments>
+						<argument>-classpath</argument>
+						<argument>target/classes</argument>
+						<argument>com.infy.gs.automation.client.JavaSqlDataFrame</argument>
+					</arguments>
+				</configuration>
+			</plugin>  
+		</plugins>
+	</build>
+	<dependencies>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
+
+
+	
+		<dependency>
+			<groupId>com.googlecode.json-simple</groupId>
+			<artifactId>json-simple</artifactId>
+			<version>1.1.1</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-core_2.10</artifactId>
+			<version>1.3.1</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.10</artifactId>
+            <version>1.3.1</version>
+        </dependency>
+		
+		
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-streaming_2.10</artifactId>
+			<version>1.3.1</version>	
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+			</exclusions>		
+		</dependency>
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-streaming-kafka_2.10</artifactId>
+			<version>1.3.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-cli</groupId>
+			<artifactId>commons-cli</artifactId>
+			<version>1.2</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-logging</groupId>
+			<artifactId>commons-logging</artifactId>
+			<version>1.1.3</version>
+		</dependency>
+		<dependency>
+			<groupId>net.sf.jopt-simple</groupId>
+			<artifactId>jopt-simple</artifactId>
+			<version>3.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>14.0.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-framework</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-log4j12</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-recipes</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+			</exclusions>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-test</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.testng</groupId>
+					<artifactId>testng</artifactId>
+				</exclusion>
+			</exclusions>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka_2.10</artifactId>
+			<version>0.8.1.1</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.zookeeper</groupId>
+					<artifactId>zookeeper</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>1.7.4</version>
+		</dependency>
+<dependency>
+	<groupId>org.scala-lang</groupId>
+	<artifactId>scala-library</artifactId>
+	<version>2.10.4</version>
+</dependency>
+
+		<dependency>
+			<groupId>com.msiops.footing</groupId>
+			<artifactId>footing-tuple</artifactId>
+			<version>0.2</version>
+		</dependency>
+
+	</dependencies>
+
+</project>
+
+Mongo part:
+package com.infy.gs.automation.client;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import java.io.NotSerializableException;
+import java.io.Serializable;
+import java.net.UnknownHostException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.SQLContext;
+import org.apache.spark.streaming.Durations;
+import org.apache.spark.streaming.Time;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+
+import com.google.gson.Gson;
+import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.DBObject;
+import com.mongodb.Mongo;
+import com.mongodb.MongoException;
+import com.mongodb.util.JSON;
+
+import scala.Tuple2;
+
+/**
+ * Use DataFrames and SQL to count words in UTF8 encoded, '\n' delimited text received from the
+ * network every second.
+ *
+ * Usage: JavaSqlNetworkWordCount <hostname> <port>
+ * <hostname> and <port> describe the TCP server that Spark Streaming would connect to receive data.
+ *
+ * To run this on your local machine, you need to first run a Netcat server
+ *    `$ nc -lk 9999`
+ * and then run the example
+ *    `$ bin/run-example org.apache.spark.examples.streaming.JavaSqlNetworkWordCount localhost 9999`
+ */
+
+public final class JavaSqlDataFrame implements Serializable{
+  
+
+  public static void main(String[] args)  {
+
+	  
+	  JavaRecord record = new JavaRecord();
+	  
+	  
+	  
+      Map<String,Integer> topicMap = new HashMap<String,Integer>();
+      String[] topic = "test,".split(",");
+      for(String t: topic)
+      {
+          topicMap.put("test", new Integer(1));
+      }
+    
+
+    // Create the context with a 1 second batch size
+    SparkConf sparkConf = new SparkConf().setAppName("JavaSqlNetworkWordCount").setMaster("local[2]").set("spark.driver.allowMultipleContexts", "true").set("spark.driver.host","zeus07").set("spark.driver.port","8080");
+    JavaStreamingContext ssc = new JavaStreamingContext(sparkConf, Durations.seconds(1));
+       
+    JavaPairReceiverInputDStream<String, String> messages = KafkaUtils.createStream(ssc, "127.0.0.1:2181","test-consumer-group", topicMap );
+    
+    JavaDStream<String> data = messages.map(new Function<Tuple2<String, String>, String>() 
+            {
+                public String call(Tuple2<String, String> message)
+                {
+                    return message._2();
+                }
+            }
+      );
+
+    data.print();
+
+
+
+    // Convert RDDs of the words DStream to DataFrame and run SQL query
+    data.foreachRDD(new Function2<JavaRDD<String>, Time, Void>() {
+      @Override
+      public Void call(JavaRDD<String> rdd, Time time) throws UnknownHostException   {
+        //SQLContext sqlContext = JavaSQLContextSingleton.getInstance(rdd.context());
+    	  Mongo mongo = new Mongo("localhost", 27017);
+    	  DB db = mongo.getDB("sparkdb");
+    	  DBCollection alertCollection = null ;
+    	  alertCollection = db.getCollection("record");
+    	  BasicDBObject basicDBObject = new BasicDBObject();
+    	  
+         
+        // Convert JavaRDD[String] to JavaRDD[bean class] to DataFrame
+        JavaRDD<JavaRecord> rowRDD = rdd.map(new Function<String, JavaRecord>() {
+          public JavaRecord call(String word)    {
+            
+            
+            
+               	String[] xr = word.split(",");
+		    	
+		    	String alertids[] = xr[0].split("=");
+		    	String alertId = alertids[1];
+		    	
+		    	String jobNames[]=xr[1].split("=");
+		    	String jobName=jobNames[1];
+		    	
+		    	String desc[]=xr[2].split("=");
+		    	String description=desc[1];
+		    	
+		    	String timestamps[]=xr[3].split("=");
+		    	String dtimestamp=timestamps[1];
+		    	
+		    	record.setAlertId(alertId);
+		    	record.setJobName(jobName);
+		    	record.setDescription(description);
+		    	record.setTimestamp(dtimestamp);
+		   
+		    	
+		                   
+            return record;
+          }
+        });
+        
+       List<JavaRecord> l=rowRDD.collect();
+       
+       
+       for (int i = 0; i < l.size(); i++) {
+       	
+    	   basicDBObject.put("alertId",l.get(i).getAlertId());
+    	   basicDBObject.put("jobName",l.get(i).getJobName()); 
+    	   basicDBObject.put("description",l.get(i).getDescription()); 
+    	   basicDBObject.put("timestamp",l.get(i).getTimestamp()); 
+    	 
+				
+       }
+       if(basicDBObject != null && !basicDBObject.isEmpty())
+       alertCollection.insert(basicDBObject);
+       
+       
+       
+       /**** Find and display ****/
+   	BasicDBObject searchQuery = new BasicDBObject();
+   	searchQuery.put("jobName", "CHOG_JOB_NOS");
+    
+   	DBCursor cursor = alertCollection.find(searchQuery);
+    
+   	while (cursor.hasNext()) {
+   		System.out.println(cursor.next()+"result value by search query");
+   	}
+    
+   	/**** Update ****/
+   	// search document where name="mkyong" and update it with new values
+   	BasicDBObject query = new BasicDBObject();
+   	query.put("jobName", "CHOG_JOB_NOS");
+    
+   	BasicDBObject newDocument = new BasicDBObject();
+   	newDocument.put("jobName", "JOBFAILURE_SEARCH_EXACTPATTERN");
+    
+   	BasicDBObject updateObj = new BasicDBObject();
+   	updateObj.put("$set", newDocument);
+    
+   	alertCollection.update(query, updateObj);
+    
+  
+
+        
+       /* DataFrame wordsDataFrame = sqlContext.createDataFrame(rowRDD, JavaRecord.class);
+
+        
+        wordsDataFrame.registerTempTable("alerts");
+
+        
+        DataFrame wordCountsDataFrame =      
+        		
+        		sqlContext.sql("SELECT timestamp FROM alerts WHERE jobName = 'CHOG_JOB_NOS'");
+        System.out.println("========= " + time + "=========");
+        wordCountsDataFrame.show();*/
+        return null;
+      }
+    });
+    
+    
+    
+    
+
+    ssc.start();
+    ssc.awaitTermination();
+  }
+  
+public  static void findEmployee(BasicDBObject query, DBCollection coll ){
+
+	    DBCursor cursor = coll.find(query);
+
+	    try {
+	       while(cursor.hasNext()) {
+	          DBObject dbobj = cursor.next();
+	        //Converting BasicDBObject to a custom Class(Employee)
+	          JavaRecord emp = (new Gson()).fromJson(dbobj.toString(), JavaRecord.class);
+	          System.out.println(emp.getDescription()+"**********************************");
+	       }
+	    } finally {
+	       cursor.close();
+	    }
+
+	}
+
+  
+}
+
+/** Lazily instantiated singleton instance of SQLContext */
+/*class JavaSQLContextSingleton {
+  static private transient SQLContext instance = null;
+  static public SQLContext getInstance(SparkContext sparkContext) {
+    if (instance == null) {
+      instance = new SQLContext(sparkContext);
+    }
+    return instance;
+  }
+}*/
+
+Moving average spark
+package com.infy.gs.automation.client;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.spark.HashPartitioner;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.api.java.function.VoidFunction;
+import org.apache.spark.streaming.Duration;
+import org.apache.spark.streaming.Time;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+
+
+import com.datastax.spark.connector.cql.CassandraConnector;
+
+
+import static com.datastax.spark.connector.japi.CassandraJavaUtil.*;
+import scala.Tuple2;
+
+public class SparkStream implements Serializable{
+	
+
+    static String query1;
+
+	public static void main(String args[])
+    {
+       
+		long durationInMilliSec = 30000;
+        Map<String,Integer> topicMap = new HashMap<String,Integer>();
+        String[] topic = "test,".split(",");
+        for(String t: topic)
+        {
+            topicMap.put("test", new Integer(1));
+        }
+      
+        
+        SparkConf _sparkConf = new SparkConf().setAppName("KafkaReceiver").setMaster("local[2]").set("spark.driver.host","zeus07").set("spark.driver.port","8080"); 
+       _sparkConf.set("spark.cassandra.connection.host", "localhost");
+        
+       JavaSparkContext sc = new JavaSparkContext(_sparkConf); 
+        
+        JavaStreamingContext jsc = new JavaStreamingContext(sc,
+				new Duration(durationInMilliSec));
+        
+					        
+        
+        JavaPairReceiverInputDStream<String, String> messages = (JavaPairReceiverInputDStream<String, String>) KafkaUtils.createStream(jsc, "localhost:2181","test-consumer-group", topicMap );
+
+        System.out.println("Connection done++++++++++++++");
+        JavaDStream<String> data = messages.map(new Function<Tuple2<String, String>, String>() 
+                                                {
+                                                    public String call(Tuple2<String, String> message)
+                                                    {
+                                                        return message._2();
+                                                    }
+                                                }
+                                          );
+        
+        data.print();
+   
+
+        
+        JavaPairDStream<String, Integer> result = data.mapToPair(
+        		 new PairFunction<String, String, Integer>() {
+         		    public Tuple2<String, Integer> call(String x) {
+         		    	String[] xr = x.split(":");
+         		    	return new Tuple2(xr[0], new Integer(xr[1].replaceFirst("%", "").trim()));
+         		  }
+
+         		});
+        
+
+    
+    
+    Function<Integer, AverageCalculator> createAcc = new Function<Integer, AverageCalculator>() {
+  	  public AverageCalculator call(Integer x) {
+  	    return new AverageCalculator(x, 1);
+  	  }
+  	};
+  	
+  	Function2<AverageCalculator, Integer, AverageCalculator> addAndCount =
+  	  new Function2<AverageCalculator, Integer, AverageCalculator>() {
+  	  public AverageCalculator call(AverageCalculator a, Integer x) {
+  	    a.total_ += x;
+  	    a.num_ += 1;
+  	    return a;
+  	  }
+  	};
+  	
+  	Function2<AverageCalculator, AverageCalculator, AverageCalculator> combine =
+  	  new Function2<AverageCalculator, AverageCalculator, AverageCalculator>() {
+  	  public AverageCalculator call(AverageCalculator a, AverageCalculator b) {
+  	    a.total_ += b.total_;
+  	    a.num_ += b.num_;
+  	    return a;
+  	  }
+  	};
+  	
+  	AverageCalculator initial = new AverageCalculator(0,0);
+  	JavaPairDStream<String, AverageCalculator> avgCounts =
+    		result.combineByKey(createAcc, addAndCount, combine, new HashPartitioner(1));
+  	
+  	
+ 
+  	/*
+
+  	
+  	
+  	
+  	avgCounts.foreach(new Function2<JavaPairRDD<String,AverageCalculator>, Time, Void>() {
+  		
+		@Override
+		public Void call(JavaPairRDD<String, AverageCalculator> values,
+				Time time) throws Exception {
+			
+			values.foreach(new VoidFunction<Tuple2<String, AverageCalculator>> () {
+
+				@Override
+				public void call(Tuple2<String, AverageCalculator> tuple)
+						throws Exception {
+					
+					System.out.println("Counter:%%%%%%%%%%%%%%%%%%%%%%" + tuple._1().trim() + "," + tuple._2().avg());
+					
+										
+				}} );
+			
+			
+		}}); 
+		
+		*/
+  	//com.datastax.driver.core.Cluster cluster = Cluster.builder().addContactPoint("localhost").build(); 				     
+	//com.datastax.driver.core.Session session = cluster.connect("gs");
+  	/*CassandraConnector connector = CassandraConnector.apply(sc.getConf());
+  	Session session = connector.openSession();
+  	
+  	List<JavaPairRDD<String, AverageCalculator>>  averagesRDDList = avgCounts.slice(new Time(System.currentTimeMillis()-durationInMilliSec), new Time(System.currentTimeMillis()));
+    	
+  	for(JavaPairRDD<String, AverageCalculator> averagesRDD :averagesRDDList){
+  		averagesRDD.foreach(new VoidFunction<Tuple2<String, AverageCalculator>> () {
+
+			@Override
+			public void call(Tuple2<String, AverageCalculator> tuple)
+					throws Exception {
+				
+				System.out.println("Counter:%%%%%%%%%%%%%%%%%%%%%%" + tuple._1().trim() + "," + tuple._2().avg());
+				query1 = "INSERT INTO average(currenttime, resourceruntime, resourcetype, averageusage) VALUES("+
+						new Date(System.currentTimeMillis())+","+durationInMilliSec+","+tuple._1().trim()+","+tuple._2().avg()+")";
+				
+				session.execute(query1); 
+									
+			}} );
+		
+	}*/
+  		
+  		
+
+  
+  
+  	
+    //javaFunctions(avgCounts).writerBuilder("gs", "average", mapToRow(AverageBean.class)).saveToCassandra();
+
+  	
+  	
+      result.print();
+      
+      jsc.start();
+      jsc.awaitTermination();
+
+  }
+    
+
+    
+}
+
+package com.infy.gs.automation.client;
+
+import java.io.Serializable;
+
+public class AverageCalculator implements Serializable{
+	
+	  public AverageCalculator(int total, int num)
+	  {
+		  total_ = total;
+		  num_ = num; 
+	 }
+	  
+	  public int total_;
+	  public int num_;
+	  
+	  public float avg() {
+		  return total_ / (float) num_;
+	  }
+	  
+
+}
+
+package com.infy.gs.automation.client;
+
+import java.io.Serializable;
+import java.util.Date;
+
+
+public class AverageBean implements Serializable{
+	
+	public Date currenttime;
+	public Long resourceruntime;
+	public String resourcetype;
+	public Float averageusage;
+	
+	public Date getCurrenttime() {
+		return currenttime;
+	}
+	public void setCurrenttime(Date currenttime) {
+		this.currenttime = currenttime;
+	}
+	public Long getResourceruntime() {
+		return resourceruntime;
+	}
+	public void setResourceruntime(Long resourceruntime) {
+		this.resourceruntime = resourceruntime;
+	}
+	public String getResourcetype() {
+		return resourcetype;
+	}
+	public void setResourcetype(String resourcetype) {
+		this.resourcetype = resourcetype;
+	}
+	public Float getAverageusage() {
+		return averageusage;
+	}
+	public void setAverageusage(Float averageusage) {
+		this.averageusage = averageusage;
+	}
+	public AverageBean(Date currenttime, Long resourceruntime,
+			String resourcetype, Float averageusage) {
+		super();
+		this.currenttime = currenttime;
+		this.resourceruntime = resourceruntime;
+		this.resourcetype = resourcetype;
+		this.averageusage = averageusage;
+	}
+	
+	
+}
+Log consumer
+
+package com.infy.spark.consumer;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.spark.HashPartitioner;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFlatMapFunction;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.api.java.function.VoidFunction;
+import org.apache.spark.streaming.Duration;
+import org.apache.spark.streaming.Time;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+
+
+
+
+
+import com.google.common.base.Optional;
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.streaming.Duration;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+
+import scala.Tuple2;
+
+import java.io.Serializable;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
+
+
+
+
+
+
+
+
+import com.infy.spark.utilities.LogPattternMatch;
+
+
+
+
+
+
+
+
+//import static com.datastax.spark.connector.japi.CassandraJavaUtil.*;
+import scala.Tuple2;
+
+public class LogConsumer implements Serializable{
+
+
+	
+	public static void main(String args[])
+	{
+
+		long durationInMilliSec = 30000;		
+		Map<String,Integer> topicMap = new HashMap<String,Integer>();
+
+		String[] topic = "test,".split(",");
+		for(String t: topic)
+		{
+			topicMap.put("test", new Integer(1));
+		}
+
+
+		SparkConf _sparkConf = new SparkConf().setAppName("KafkaReceiver").setMaster("local[2]").set("spark.driver.host","zeus07").set("spark.driver.port","8080"); 
+		_sparkConf.set("spark.cassandra.connection.host", "localhost");
+
+		JavaSparkContext sc = new JavaSparkContext(_sparkConf); 
+
+		JavaStreamingContext jsc = new JavaStreamingContext(sc,	new Duration(durationInMilliSec));	
+
+		 
+		JavaPairReceiverInputDStream<String, String> messages = (JavaPairReceiverInputDStream<String, String>) KafkaUtils.createStream(jsc, "127.0.0.1:2181","test-consumer-group", topicMap );       
+
+		System.out.println("Connection done++++++++++++++");
+		
+		
+		
+
+		
+		JavaPairDStream<String, String> data  = messages.filter(new Function<Tuple2<String, String>, Boolean> (){
+
+			@Override
+			public Boolean call(Tuple2<String, String> arg0) throws Exception {
+
+				//System.out.println("Message "+arg0._2);
+				return (new LogPattternMatch().isExceptionMatch(arg0._2));				
+			}			
+		});	
+		
+
+		JavaDStream<String> exceptionMessages = data.map(new Function<Tuple2<String, String>, String>() {
+
+			public String call(Tuple2<String, String> message) {
+
+				System.out.println("A#############################rg)+Arg1***************** "+message._2);
+				return (new LogPattternMatch().searchException(message._2));				
+			}
+		});
+		
+				
+		JavaPairDStream<String, Integer> exceptionKeyValues = exceptionMessages.mapToPair(new PairFunction<String, String, Integer>() {
+
+			@Override
+			public Tuple2<String, Integer> call(String arg0) throws Exception {				
+				
+
+				System.out.println("888888888888888888888888***************** "+arg0);
+				
+				return new Tuple2<String, Integer>(arg0,1);
+			}
+		});
+
+	
+		
+		JavaPairDStream<String, Integer> exceptionCount = exceptionKeyValues.reduceByKey(new Function2<Integer, Integer, Integer>(){
+
+			@Override
+			public Integer call(Integer arg0, Integer arg1) throws Exception {
+				
+				System.out.println("Arg0+Arg1***************** "+arg0+" "+arg1	);
+				
+				return arg0+arg1;
+			
+			}
+			
+			
+		});
+		
+		
+		exceptionCount.print();				
+	
+		
+			
+		data.print();
+		jsc.start();
+		jsc.awaitTermination();
+
+	}
+	
+	  
+
+
+
+}
+
+package com.infy.spark.utilities;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class LogPattternMatch {
+
+	private Map<String,Integer> exceptionCountMap = new LinkedHashMap<String,Integer>();
+
+	public Map<String, Integer> matchAndCount(String line) {
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		while (matcher.find()){
+
+			exceptionName = matcher.group();
+			incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println(exceptionName);
+		}
+		return exceptionCountMap;
+	}
+	
+	public Boolean isExceptionMatch(String line) {
+		
+		Boolean isMAtch = false;
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		while (matcher.find()){
+
+			exceptionName = matcher.group();
+			incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println("______________________________________isExceptionMathch "+exceptionName);
+			isMAtch = true;
+		}
+		//exceptionCountMap.
+		return isMAtch;
+	}
+
+public String searchException(String line) {
+		
+		//Boolean isMAtch = false;
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		if(matcher.find()){
+
+			exceptionName = matcher.group();
+		//	incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println("Search exception.....................................  "+exceptionName);
+		}
+		//exceptionCountMap.
+		return exceptionName;
+	}
+	
+	public static void main(String[] args) {
+
+		/*String text = "\"Exception in thread \"main\" java.lang.NullPointerException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);"+
+				" Exception in thread \"main\" java.lang.ClassCastException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);"+
+				" Exception in thread \"main\" java.lang.ClassCastException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);";
+*/
+		String text = " java.lang.NullPointerException";
+		new LogPattternMatch().matchAndCount(text);
+	}
+
+	private static void incrementMapCount(Map<String,Integer> map, String exceptionName) {
+
+		Integer currentCount = (Integer)map.get(exceptionName);
+
+		if (currentCount == null) {
+
+			map.put(exceptionName, new Integer(1));
+		}
+		else {
+
+			currentCount = new Integer(currentCount.intValue() + 1);
+			map.put(exceptionName,currentCount);
+		}
+	}
+}
+
+
+kafka 
+
+package com.infy.kafka.start;
+
+import kafka.producer.Partitioner;
+
+public class KafkaSimplePartitioner implements Partitioner {
+
+	public int partition(Object key, int a_numPartitions) {
+
+		
+		System.out.println((int) System.currentTimeMillis());
+		return (int) System.currentTimeMillis();
+		
+		
+	}
+	
+	public static void main(String[] args) {
+		
+		System.out.println((int) System.currentTimeMillis());
+		
+	}
+}
+
+package com.infy.kafka.start;
+
+import java.sql.Timestamp;
+import java.util.Date;
+import java.util.Properties;
+import java.util.Random;
+
+import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
+
+import com.infy.kafka.values.KafkaProducerConstants;
+/**
+ * 
+ * @author Achint_Verma
+ *
+ */
+public class KafkaStart {
+
+	public static void main(String[] args) {
+
+		Producer<String, String> producer = null;
+
+		try {
+
+			Random rnd = new Random();
+
+			Properties props = new Properties();
+
+			props.put("metadata.broker.list", KafkaProducerConstants.KAFKFA_CLUSTERS);// defines where the Producer can find a one or more Brokers to determine the Leader for each topic
+			props.put("serializer.class", "kafka.serializer.StringEncoder");
+			//props.put("partitioner.class", "example.producer.SimplePartitioner"); //used to determine which Partition in the Topic the message is to be sent to. Random partition if not specified.
+			props.put("request.required.acks", "1");//0,1 or -1 : whether acknowledgement required or not 
+
+			ProducerConfig config = new ProducerConfig(props);
+			producer = new Producer<String, String>(config);
+
+			while(true) {
+
+				for (long nEvents = 0; nEvents < KafkaProducerConstants.NO_OF_MESSAGES; nEvents++) {
+
+					String msg = "";
+					String msg1 = "";
+					Integer alertId = 1;
+					String jobName = "";
+					String description="";
+					Date d=new Date();
+					try {
+
+						alertId = rnd.nextInt(100);
+						jobName = "CHOG_JOB_NOS";
+						description="asdfghjk ";
+					
+						msg = "AlertId="+alertId+",Jobname="+jobName+",Description="+description+",Timestamp="+ new Timestamp(d.getTime());
+								
+					
+						//msg1 = "Current Memory Usage:" + memoryUsage+"%";
+
+						System.out.println(msg);
+						//System.out.println(msg1+"\n");
+
+						KeyedMessage<String, String> data = new KeyedMessage<String, String>("test",msg);
+						//KeyedMessage<String, String> data1 = new KeyedMessage<String,String>("test",msg1);
+						producer.send(data);
+						//producer.send(data1);
+
+						//
+						//System.out.println("Sleeping for "+KafkaProducerConstants.SLEEP_TIME+" ms ...");
+						//Thread.sleep(KafkaProducerConstants.SLEEP_TIME);
+					}
+					catch (Exception e) {
+
+						e.printStackTrace();
+						System.err.println("Error in sending mesage :"+ msg);
+					}
+				}
+				Thread.sleep(KafkaProducerConstants.SLEEP_TIME);
+			}
+		}
+		catch (Exception e) {
+
+			System.err.println("Some Exception occured:");
+			e.printStackTrace();
+		}
+		finally{
+
+			producer.close();
+		}
+	}
+}
+
+package com.infy.kafka.values;
+
+public class KafkaProducerConstants {
+	
+	public static final long NO_OF_MESSAGES = 3;
+	public static final int SLEEP_TIME = 10000;
+	public static final String KAFKFA_CLUSTERS = "localhost:9092"; 
+}
+
+kafkalogprovider
+package com.infy.kafka.logprovider;
+
+import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import org.apache.commons.io.input.Tailer;
+import org.apache.commons.io.input.TailerListener;
+
+import com.infy.kafka.values.KafkaProducerConstants;
+
+/**
+ * For reading log file and sending to Kafka Broker
+ * 
+ * @author achint_verma
+ *
+ */
+
+public class KafkaLogReader {
+
+	// private final Log logger = LogFactory.getLog(KafkaLogReader.class);
+
+	public static void main(String[] args) {
+
+		String filePath = KafkaProducerConstants.INPUT_LOG_LOCATION;
+
+		if (!new File(filePath).exists()) {
+
+			System.err.println(filePath + " is not found !!!! . Please check INPUT_LOG_LOCATION parameter  ");
+			System.exit(0);
+		}
+		System.out.println("File Exists!");
+		TailerListener listener = new KafkaTailListener();
+		Tailer tailer = new Tailer(new File(filePath), listener, KafkaProducerConstants.TAIL_CHECK_INTERVAL);
+		
+		ExecutorService pool = Executors.newCachedThreadPool();
+		pool.submit(tailer);
+	}
+}
+
+package com.infy.kafka.logprovider;
+
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
+
+import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
+
+import org.apache.commons.io.input.Tailer;
+import org.apache.commons.io.input.TailerListenerAdapter;
+
+import com.infy.kafka.values.KafkaProducerConstants;
+
+public class KafkaTailListener extends TailerListenerAdapter {	
+
+	private Producer<String, String> producer;	
+	private List<KeyedMessage<String, String>> messageList = new LinkedList<KeyedMessage<String,String>>();//for storing batch of messages to be sent to Kakfa producer
+
+	public KafkaTailListener() {		
+
+		Properties props = new Properties();
+
+		props.put("metadata.broker.list", KafkaProducerConstants.KAFKFA_CLUSTERS);// defines where the Producer can find a one or more Brokers to determine the Leader for each topic
+		props.put("serializer.class", "kafka.serializer.StringEncoder");		
+		props.put("request.required.acks", "1");//0,1 or -1 : whether acknowledgement required or not
+		//props.put("partitioner.class", "example.producer.SimplePartitioner"); //used to determine which Partition in the Topic the message is to be sent to. Random partition if not specified.
+
+		ProducerConfig config = new ProducerConfig(props); 
+		this.producer = new Producer<String, String>(config);                
+	}
+
+	public void init(Tailer tailer) { 
+	} 
+	/**
+	 * For sending NO_OF_MESSAGES lines from log file to Kafka broker
+	 * Every new NO_OF_MESSAGES that are written to log file are stored in LinkedList.
+	 * Once size of LinkedList reaches NO_OF_MESSAGES, data is pushed to Kafka broker and list is cleared for storing new NO_OF_MESSAGES lines
+	 * @param line Line received from tail on log
+	 * @ 
+	 */
+	public void handle(String line) {
+
+		KeyedMessage<String, String> data = new KeyedMessage<String, String>(KafkaProducerConstants.KAFKFA_TOPIC,line);				
+		messageList.add(data);
+		System.out.println("Adding message ["+line+"] to message batch ...");
+
+		if (messageList.size() == KafkaProducerConstants.NO_OF_MESSAGES) {
+
+			try {	
+				System.out.println("... message batch ready !");
+				producer.send(messageList);				
+
+				System.out.println("---------------------------------------------------------------------");
+				System.out.println("MESSAGE BATCH SENT !!");
+				System.out.println("---------------------------------------------------------------------");
+				System.out.println("\n");
+			} 
+			catch (Exception e) {
+
+				e.printStackTrace();
+				System.out.println("Error in sending message");
+			}
+			finally {
+
+				messageList.clear();				
+			}			
+		}		
+	}
+
+	public void handle(Exception ex) { 
+
+		//logger.error("Kafka Tailer ", ex); 
+	} 
+}
+
+package com.infy.kafka.values;
+
+public class KafkaProducerConstants {
+	
+	public static final long NO_OF_MESSAGES = 5;
+	public static final int SLEEP_TIME = 3000;
+	public static final String KAFKFA_CLUSTERS = "localhost:9092";
+	public static final int KAFKFA_PORT = 9092;
+	public static final String INPUT_LOG_LOCATION = "/root/kafka/log.txt";
+	public static final int KAKFA_PARTITION = 0;
+	public static final String KAFKFA_TOPIC = "test";
+	public static final long TAIL_CHECK_INTERVAL = 3000;
+}
+
+kafkaprovider
+
+package com.infy.kafka.start;
+
+import java.util.Properties;
+import java.util.Random;
+
+import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
+
+import com.infy.kafka.values.KafkaProducerConstants;
+/**
+ * 
+ * @author Achint_Verma
+ *
+ */
+public class KafkaStart {
+
+	public static void main(String[] args) {
+
+		Producer<String, String> producer = null;
+
+		try {
+
+			Random rnd = new Random();
+
+			Properties props = new Properties();
+
+			props.put("metadata.broker.list", KafkaProducerConstants.KAFKFA_CLUSTERS);// defines where the Producer can find a one or more Brokers to determine the Leader for each topic
+			props.put("serializer.class", "kafka.serializer.StringEncoder");
+			//props.put("partitioner.class", "example.producer.SimplePartitioner"); //used to determine which Partition in the Topic the message is to be sent to. Random partition if not specified.
+			props.put("request.required.acks", "1");//0,1 or -1 : whether acknowledgement required or not 
+
+			ProducerConfig config = new ProducerConfig(props);
+			producer = new Producer<String, String>(config);
+
+			while(true) {
+
+				for (long nEvents = 0; nEvents < KafkaProducerConstants.NO_OF_MESSAGES; nEvents++) {
+
+					String msg = "";
+					String msg1 = "";
+					String CPUUsage = "";
+					String memoryUsage = "";
+
+					try {
+
+						CPUUsage = String.valueOf(rnd.nextInt(100));
+						memoryUsage = String.valueOf(rnd.nextInt(100));
+						msg = "Current CPU Usage:" + CPUUsage + "%";
+						msg1 = "Current Memory Usage:" + memoryUsage+"%";
+
+						System.out.println(msg);
+						System.out.println(msg1+"\n");
+
+						KeyedMessage<String, String> data = new KeyedMessage<String, String>("test",msg);
+						KeyedMessage<String, String> data1 = new KeyedMessage<String,String>("test",msg1);
+						producer.send(data);
+						producer.send(data1);
+
+						//
+						//System.out.println("Sleeping for "+KafkaProducerConstants.SLEEP_TIME+" ms ...");
+						//Thread.sleep(KafkaProducerConstants.SLEEP_TIME);
+					}
+					catch (Exception e) {
+
+						e.printStackTrace();
+						System.err.println("Error in sending mesage :"+ msg);
+					}
+				}
+				Thread.sleep(KafkaProducerConstants.SLEEP_TIME);
+			}
+		}
+		catch (Exception e) {
+
+			System.err.println("Some Exception occured:");
+			e.printStackTrace();
+		}
+		finally{
+
+			producer.close();
+		}
+	}
+}
+
+package com.infy.kafka.start;
+
+import java.util.Properties;
+import java.util.Random;
+
+import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
+
+import com.infy.kafka.values.KafkaProducerConstants;
+/**
+ * 
+ * @author Achint_Verma
+ *
+ */
+public class KafkaStart {
+
+	public static void main(String[] args) {
+
+		Producer<String, String> producer = null;
+
+		try {
+
+			Random rnd = new Random();
+
+			Properties props = new Properties();
+
+			props.put("metadata.broker.list", KafkaProducerConstants.KAFKFA_CLUSTERS);// defines where the Producer can find a one or more Brokers to determine the Leader for each topic
+			props.put("serializer.class", "kafka.serializer.StringEncoder");
+			//props.put("partitioner.class", "example.producer.SimplePartitioner"); //used to determine which Partition in the Topic the message is to be sent to. Random partition if not specified.
+			props.put("request.required.acks", "1");//0,1 or -1 : whether acknowledgement required or not 
+
+			ProducerConfig config = new ProducerConfig(props);
+			producer = new Producer<String, String>(config);
+
+			while(true) {
+
+				for (long nEvents = 0; nEvents < KafkaProducerConstants.NO_OF_MESSAGES; nEvents++) {
+
+					String msg = "";
+					String msg1 = "";
+					String CPUUsage = "";
+					String memoryUsage = "";
+
+					try {
+
+						CPUUsage = String.valueOf(rnd.nextInt(100));
+						memoryUsage = String.valueOf(rnd.nextInt(100));
+						msg = "Current CPU Usage:" + CPUUsage + "%";
+						msg1 = "Current Memory Usage:" + memoryUsage+"%";
+
+						System.out.println(msg);
+						System.out.println(msg1+"\n");
+
+						KeyedMessage<String, String> data = new KeyedMessage<String, String>("test",msg);
+						KeyedMessage<String, String> data1 = new KeyedMessage<String,String>("test",msg1);
+						producer.send(data);
+						producer.send(data1);
+
+						//
+						//System.out.println("Sleeping for "+KafkaProducerConstants.SLEEP_TIME+" ms ...");
+						//Thread.sleep(KafkaProducerConstants.SLEEP_TIME);
+					}
+					catch (Exception e) {
+
+						e.printStackTrace();
+						System.err.println("Error in sending mesage :"+ msg);
+					}
+				}
+				Thread.sleep(KafkaProducerConstants.SLEEP_TIME);
+			}
+		}
+		catch (Exception e) {
+
+			System.err.println("Some Exception occured:");
+			e.printStackTrace();
+		}
+		finally{
+
+			producer.close();
+		}
+	}
+}
+
+package com.infy.kafka.values;
+
+public class KafkaProducerConstants {
+	
+	public static final long NO_OF_MESSAGES = 10;
+	public static final int SLEEP_TIME = 30000;
+	public static final String KAFKFA_CLUSTERS = "localhost:9092"; 
+}
+
+
+
+
+
+
+
+
+
+
 
 
 

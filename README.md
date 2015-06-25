@@ -7992,16 +7992,7 @@ public class KafkaProducerConstants {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+https://github.com/guozhongxin/sparkLogParser
+https://github.com/li-zhihui/WorkLoader
+https://github.com/ronak21691/SimpleApp/blob/master/src/main/scala/AccessLogParser.scala
+https://github.com/ronak21691/SimpleApp/blob/master/src/main/scala/SimpleApp.scala

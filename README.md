@@ -1377,8 +1377,2960 @@ public class ProcessBean implements Serializable{
 	
 	
 }
+------------------------------------Kafka------
+package com.infy.spark.utilities;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class LogPattternMatch {
+
+	private Map<String,Integer> exceptionCountMap = new LinkedHashMap<String,Integer>();
+
+	public Map<String, Integer> matchAndCount(String line) {
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		while (matcher.find()){
+
+			exceptionName = matcher.group();
+			incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println(exceptionName);
+		}
+		return exceptionCountMap;
+	}
+	
+	public Boolean isExceptionMatch(String line) {
+		
+		Boolean isMAtch = false;
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		while (matcher.find()){
+
+			exceptionName = matcher.group();
+			incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println("______________________________________isExceptionMathch "+exceptionName);
+			isMAtch = true;
+		}
+		//exceptionCountMap.
+		return isMAtch;
+	}
+
+public String searchException(String line) {
+		
+		//Boolean isMAtch = false;
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		if(matcher.find()){
+
+			exceptionName = matcher.group();
+		//	incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println("Search exception.....................................  "+exceptionName);
+		}
+		//exceptionCountMap.
+		return exceptionName;
+	}
+	
+	public static void main(String[] args) {
+
+		/*String text = "\"Exception in thread \"main\" java.lang.NullPointerException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);"+
+				" Exception in thread \"main\" java.lang.ClassCastException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);"+
+				" Exception in thread \"main\" java.lang.ClassCastException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);";
+*/
+		String text = " java.lang.NullPointerException";
+		new LogPattternMatch().matchAndCount(text);
+	}
+
+	private static void incrementMapCount(Map<String,Integer> map, String exceptionName) {
+
+		Integer currentCount = (Integer)map.get(exceptionName);
+
+		if (currentCount == null) {
+
+			map.put(exceptionName, new Integer(1));
+		}
+		else {
+
+			currentCount = new Integer(currentCount.intValue() + 1);
+			map.put(exceptionName,currentCount);
+		}
+	}
+}
+
+package com.infy.gs.automation.producer;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
+
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
+
+public class AlertProducerService {
+	private String fileName;
+	private String colHeader;
+	private Producer<String, String> producer;
+
+	/**
+	 * Initialize Kafka configuration
+	 */
+	public void initKafkaConfig() {
+
+		// Build the configuration required for connecting to Kafka
+		Properties props = new Properties();
+		// List of Kafka brokers. If there're multiple brokers, they're
+		props.put("metadata.broker.list", "localhost:9092");
+		// Serializer used for sending data to kafka. Since we are sending
+		// string, we are using StringEncoder.
+		props.put("serializer.class", "kafka.serializer.StringEncoder");
+		// We want acks from Kafka that messages are properly received.
+		props.put("request.required.acks", "1");
+
+		// Create the producer instance
+		ProducerConfig config = new ProducerConfig(props);
+		producer = new Producer<String, String>(config);
+	}
+
+	/**
+	 * Initialize configuration for file to be read (csv)
+	 * 
+	 * @param fileName
+	 * @throws IOException
+	 */
+	public void initFileConfig(String fileName) throws IOException, Exception {
+		this.fileName = fileName;
+
+	
+		try {
+			
+			
+			FileInputStream fis = new FileInputStream(fileName);
+					  
+		
+			InputStream inStream =fis;
+			Reader reader = new InputStreamReader(inStream);
+			BufferedReader buffReader = IOUtils.toBufferedReader(reader);
+
+			// Get the header line to initialize CSV parser
+			colHeader = buffReader.readLine();
+			System.out.println("File header :: " + colHeader);
+
+			if (StringUtils.isEmpty(colHeader)) {
+				throw new Exception("Column header is null, something is wrong");
+			}
+		} catch (IOException e) {
+			System.out.println(e.getMessage());
+			throw e;
+		}
+		
+	}
+
+	/**
+	 * Send csv file data to the named topic on Kafka broker
+	 * 
+	 * @param topic
+	 * @throws IOException
+	 */
+	public void sendFileDataToKafka(String topic) throws IOException {
+
+		Iterable<CSVRecord> csvRecords = null;
+
+		// Parse the CSV file, using the column header
+		
+		try {
+						
+			FileInputStream fis = new FileInputStream(fileName);
+			  
+			
+			InputStream inStream =fis;
+			
+			
+			Reader reader = new InputStreamReader(inStream);
+
+			String[] colNames = StringUtils.split(colHeader, ',');
+			csvRecords = CSVFormat.DEFAULT.withIgnoreEmptyLines(true).withHeader(colNames).parse(reader);
+			
+		} catch (IOException e) {
+			System.out.println(e);
+			throw e;
+		}
+		
+		// We iterate over the records and send each over to Kafka broker
+		// Get the next record from input file
+		CSVRecord csvRecord = null;
+		Iterator<CSVRecord> csvRecordItr = csvRecords.iterator();
+		boolean firstRecDone = false;
+		
+		while (csvRecordItr.hasNext()) {
+			try {
+				csvRecord = csvRecordItr.next();
+				
+				
+				if (!firstRecDone) {
+					firstRecDone = true;
+					continue;
+				}
+				// Get a map of column name and value for a record
+				Map<String, String> keyValueRecord = csvRecord.toMap();
+
+				// Create the message to be sent
+				String message = "";
+				int size = keyValueRecord.size();
+				int count = 0;
+				String msgstr[]=null;
+				for (String key : keyValueRecord.keySet()) {
+					count++;
+					
+					
+					message = message + StringUtils.replace(key, "\"", "") + "=";
+					
+					if (keyValueRecord.get(key).contains(",") || keyValueRecord.get(key).contains("=") || keyValueRecord.get(key).isEmpty()){
+					
+					 msgstr = StringUtils.replace(keyValueRecord.get(key),"\"", "").replace("=", ":").replaceAll(",,", ",No data,").split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)");
+					
+					 for(int i=0;i<msgstr.length;i++){
+					 message =message +" " + msgstr[i];
+					 }
+					}
+					else
+						message =message +StringUtils.replace(keyValueRecord.get(key),"\"", "");
+					
+					if (count != size) {
+						message = message + ",";
+					}
+				}
+			//	String msg = remCommaFmData(message);
+				// Send the message
+			//	System.out.println(msg);
+				System.out.println(message+"*****************************");
+				KeyedMessage<String, String> data = new KeyedMessage<String, String>(
+						topic,  message);
+				producer.send(data);
+
+			} catch (NoSuchElementException e) {
+				System.out.println(e.getMessage());
+			}
+		}
+		
+	}
+
+	/**
+	 * Cleanup stuff
+	 */
+	public void cleanup() {
+		producer.close();
+	}
+	
+}
 
 
+-----------Log kafka
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.File;
+
+import org.apache.commons.lang.Validate;
+
+public class AppenderConfig {
+    private final String name;
+    private final String pattern;
+    private final File logFile;
+    
+    public AppenderConfig(final String name, final String pattern, final File logFile) {
+        Validate.notNull(name);
+        Validate.notNull(pattern);
+        Validate.notNull(logFile);
+        
+        this.name = name;
+        this.pattern = pattern;
+        this.logFile = logFile;
+    }
+
+    public File getLogFile() {
+        return logFile;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getPattern() {
+        return pattern;
+    }
+}
+
+
+
+package com.infy.gs.automation.log.parser;
+
+public enum Level {
+    FATAL, ERROR, WARN, INFO, DEBUG, TRACE;
+}
+
+package com.infy.gs.automation.log.parser;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class ListLogDataHandler implements LogDataHandler {
+    private final List<LogData> logList = 
+        Collections.synchronizedList(new ArrayList<LogData>());
+    
+    @Override
+    public void handle(LogData logData) {
+        logList.add(logData);
+    }
+
+    public int getSize() {
+        return logList.size();
+    }
+}
+
+
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Parse properties and provide access to any appender objects.
+ */
+public class Log4jAppenderConfigLoader {
+    private Logger logger = LoggerFactory.getLogger(getClass());
+    
+    private static final String FILE_PROP = "file";
+    private static final String PATTERN_PROP = "conversion";
+    
+    private final List<AppenderConfig> appenderList = new ArrayList<AppenderConfig>();
+    
+    public Log4jAppenderConfigLoader(File propsFile) throws IOException {
+        this(new FileInputStream(propsFile));
+    }
+    
+    public Log4jAppenderConfigLoader(InputStream inputStream) throws IOException {
+        Map<String, Map<String, String>> appenderMap = 
+            LogFilePatternLayoutBuilder.getPropertiesFileAppenderConfiguration(inputStream);
+        
+        for (Map.Entry<String, Map<String, String>> appenderEntry : appenderMap.entrySet()) {
+            String name = appenderEntry.getKey();
+            String pattern = appenderEntry.getValue().get(PATTERN_PROP);
+            File file = new File(appenderEntry.getValue().get(FILE_PROP));
+            
+            logger.debug("File Appender {} [Pattern: {}, File: {}]", new Object[]{name, pattern, file});
+            
+            appenderList.add(new AppenderConfig(name, pattern, file));
+        }   
+    }
+    
+    /**
+     * A convenience method to get the appender for a particular file.  This is based
+     * on just the filename, not the complete path of the file.
+     * 
+     * @param file
+     * @return
+     */
+    public AppenderConfig getAppenderConfig(File file) {
+        for(AppenderConfig appenderConfig : appenderList) {
+        	System.out.println(file.getName() +"-------------------"+ appenderConfig.getLogFile().getName());
+            if (file.getName().equals(appenderConfig.getLogFile().getName())) {
+                return appenderConfig;
+            }
+        }
+        throw new IllegalArgumentException("Appender Config not found: " + file.getName());
+    }
+}
+
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.Serializable;
+import java.util.Date;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.spi.LoggingEvent;
+
+/**
+ * A simple facade over the top of the log4j LoggingEvent to clean up stuff like
+ * the stack trace and the timestamp
+ */
+public class LogData implements Serializable{
+    private  Level level;
+    private  Date timestamp;
+    private  String loggerName;
+    private  String threadName;
+    private String message;
+    private  String stackTrace;
+    private  String logfileName;
+    
+    public LogData(){
+    	
+    }
+
+	public LogData(LoggingEvent loggingEvent) {
+        level = Level.valueOf(loggingEvent.getLevel().toString());
+        timestamp = new Date(loggingEvent.getTimeStamp());
+        loggerName = loggingEvent.getLoggerName();
+        threadName = loggingEvent.getThreadName();
+        message = loggingEvent.getRenderedMessage();
+ 
+        StringBuilder builder = new StringBuilder();
+        for (String st : loggingEvent.getThrowableStrRep()) {
+            builder.append(st);
+            builder.append(IOUtils.LINE_SEPARATOR);
+        }
+        stackTrace = builder.toString();
+    }
+
+	public Level getLevel() {
+		return level;
+	}
+
+	public void setLevel(Level level) {
+		this.level = level;
+	}
+
+	public Date getTimestamp() {
+		return timestamp;
+	}
+
+	public void setTimestamp(Date timestamp) {
+		this.timestamp = timestamp;
+	}
+
+	public String getLoggerName() {
+		return loggerName;
+	}
+
+	public void setLoggerName(String loggerName) {
+		this.loggerName = loggerName;
+	}
+
+	public String getThreadName() {
+		return threadName;
+	}
+
+	public void setThreadName(String threadName) {
+		this.threadName = threadName;
+	}
+
+	public String getMessage() {
+		return message;
+	}
+
+	public void setMessage(String message) {
+		this.message = message;
+	}
+
+	public String getStackTrace() {
+		return stackTrace;
+	}
+
+	public void setStackTrace(String stackTrace) {
+		this.stackTrace = stackTrace;
+	}
+
+	public String getLogfileName() {
+		return logfileName;
+	}
+
+	public void setLogfileName(String logfileName) {
+		this.logfileName = logfileName;
+	}
+
+ 
+}
+
+
+package com.infy.gs.automation.log.parser;
+
+
+public interface LogDataHandler {
+    void handle(LogData logData);
+}
+
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
+import org.apache.log4j.spi.LoggingEvent;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class LogFileParser extends LogFilePatternReceiver {
+    private Logger logger = LoggerFactory.getLogger(getClass());
+    private final LogDataHandler collector;
+    
+    public LogFileParser(final AppenderConfig appenderConfig, 
+                                        final LogDataHandler collector) {
+        
+        String pattern = LogFilePatternLayoutBuilder.getLogFormatFromPatternLayout(appenderConfig.getPattern());
+        logger.debug("Pattern {}", pattern);
+        
+        String timeStampFormat = LogFilePatternLayoutBuilder.getTimeStampFormat(appenderConfig.getPattern());
+        logger.debug("Time Stamp Format {}", timeStampFormat);
+        
+        setTimestampFormat(timeStampFormat);
+        setLogFormat(pattern);
+        initialize();
+        createPattern();
+        
+        this.collector = collector;
+    }
+    
+    public void process(InputStream inputStream) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        super.process(reader);
+    }
+    
+    @Override
+    public void doPost(LoggingEvent event) {
+        collector.handle(new LogData(event));
+    }
+}
+
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.log4j.helpers.OptionConverter;
+import org.apache.log4j.pattern.ClassNamePatternConverter;
+import org.apache.log4j.pattern.DatePatternConverter;
+import org.apache.log4j.pattern.FileLocationPatternConverter;
+import org.apache.log4j.pattern.FullLocationPatternConverter;
+import org.apache.log4j.pattern.LevelPatternConverter;
+import org.apache.log4j.pattern.LineLocationPatternConverter;
+import org.apache.log4j.pattern.LineSeparatorPatternConverter;
+import org.apache.log4j.pattern.LiteralPatternConverter;
+import org.apache.log4j.pattern.LoggerPatternConverter;
+import org.apache.log4j.pattern.LoggingEventPatternConverter;
+import org.apache.log4j.pattern.MessagePatternConverter;
+import org.apache.log4j.pattern.MethodLocationPatternConverter;
+import org.apache.log4j.pattern.NDCPatternConverter;
+import org.apache.log4j.pattern.PatternParser;
+import org.apache.log4j.pattern.PropertiesPatternConverter;
+import org.apache.log4j.pattern.RelativeTimePatternConverter;
+import org.apache.log4j.pattern.SequenceNumberPatternConverter;
+import org.apache.log4j.pattern.ThreadPatternConverter;
+
+public class LogFilePatternLayoutBuilder {
+	public static String getLogFormatFromPatternLayout(String patternLayout) {
+		String input = OptionConverter.convertSpecialChars(patternLayout);
+		List converters = new ArrayList();
+		List fields = new ArrayList();
+		Map converterRegistry = null;
+
+		PatternParser.parse(input, converters, fields, converterRegistry,
+				PatternParser.getPatternLayoutRules());
+		return getFormatFromConverters(converters);
+	}
+
+	public static String getTimeStampFormat(String patternLayout) {
+		int basicIndex = patternLayout.indexOf("%d");
+		if (basicIndex < 0) {
+			return null;
+		}
+
+		int index = patternLayout.indexOf("%d{");
+		// %d - default
+		if (index < 0) {
+			return "yyyy-MM-dd HH:mm:ss,SSS";
+		}
+
+		int length = patternLayout.substring(index).indexOf("}");
+		String timestampFormat = patternLayout.substring(
+				index + "%d{".length(), index + length);
+		if (timestampFormat.equals("ABSOLUTE")) {
+			return "HH:mm:ss,SSS";
+		}
+		if (timestampFormat.equals("ISO8601")) {
+			return "yyyy-MM-dd HH:mm:ss,SSS";
+		}
+		if (timestampFormat.equals("DATE")) {
+			return "dd MMM yyyy HH:mm:ss,SSS";
+		}
+		return timestampFormat;
+	}
+
+	private static String getFormatFromConverters(List converters) {
+		StringBuffer buffer = new StringBuffer();
+		for (Iterator iter = converters.iterator(); iter.hasNext();) {
+			LoggingEventPatternConverter converter = (LoggingEventPatternConverter) iter
+					.next();
+			if (converter instanceof DatePatternConverter) {
+				buffer.append("TIMESTAMP");
+			} else if (converter instanceof MessagePatternConverter) {
+				buffer.append("MESSAGE");
+			} else if (converter instanceof LoggerPatternConverter) {
+				buffer.append("LOGGER");
+			} else if (converter instanceof ClassNamePatternConverter) {
+				buffer.append("CLASS");
+			} else if (converter instanceof RelativeTimePatternConverter) {
+				buffer.append("PROP(RELATIVETIME)");
+			} else if (converter instanceof ThreadPatternConverter) {
+				buffer.append("THREAD");
+			} else if (converter instanceof NDCPatternConverter) {
+				buffer.append("NDC");
+			} else if (converter instanceof LiteralPatternConverter) {
+				LiteralPatternConverter literal = (LiteralPatternConverter) converter;
+				// format shouldn't normally take a null, but we're getting a
+				// literal, so passing in the
+				// buffer will work
+				literal.format(null, buffer);
+			} else if (converter instanceof SequenceNumberPatternConverter) {
+				buffer.append("PROP(log4jid)");
+			} else if (converter instanceof LevelPatternConverter) {
+				buffer.append("LEVEL");
+			} else if (converter instanceof MethodLocationPatternConverter) {
+				buffer.append("METHOD");
+			} else if (converter instanceof FullLocationPatternConverter) {
+				buffer.append("PROP(locationInfo)");
+			} else if (converter instanceof LineLocationPatternConverter) {
+				buffer.append("LINE");
+			} else if (converter instanceof FileLocationPatternConverter) {
+				buffer.append("FILE");
+			} else if (converter instanceof PropertiesPatternConverter) {
+				// PropertiesPatternConverter propertiesConverter =
+				// (PropertiesPatternConverter) converter;
+				// String option = propertiesConverter.getOption();
+				// if (option != null && option.length() > 0) {
+				// buffer.append("PROP(" + option + ")");
+				// } else {
+				buffer.append("PROP(PROPERTIES)");
+				// }
+			} else if (converter instanceof LineSeparatorPatternConverter) {
+				// done
+			}
+		}
+		return buffer.toString();
+	}
+
+	public static Map<String, Map<String, String>> getPropertiesFileAppenderConfiguration(
+			File propertyFile) throws IOException {
+		return getPropertiesFileAppenderConfiguration(new FileInputStream(
+				propertyFile));
+	}
+
+	public static Map<String, Map<String, String>> getPropertiesFileAppenderConfiguration(
+			InputStream inputStream) throws IOException {
+		Map<String, Map<String, String>> result = new HashMap<String, Map<String, String>>();
+		String appenderPrefix = "log4j.appender";
+		Properties props = new Properties();
+		try {
+			props.load(inputStream);
+			Map<String, String> appenders = new HashMap<String, String>();
+			for (String propertyName : props.stringPropertyNames()) {
+				if (propertyName.startsWith(appenderPrefix)) {
+					String value = propertyName.substring(appenderPrefix
+							.length() + 1);
+					if (value.indexOf(".") == -1) {
+						// no sub-values - this entry is the appender name &
+						// class
+						appenders.put(value, props.getProperty(propertyName)
+								.trim());
+						break;
+					}
+				}
+			}
+
+			for (Map.Entry<String, String> appenderEntry : appenders.entrySet()) {
+				String appenderName = appenderEntry.getKey();
+				String conversion = props.getProperty(appenderPrefix + "."
+						+ appenderName + ".layout.ConversionPattern");
+				String file = props.getProperty(appenderPrefix + "."
+						+ appenderName + ".File");
+				if (conversion != null && file != null) {
+					Map<String, String> entry = new HashMap<String, String>();
+					entry.put("file", file.trim());
+					entry.put("conversion", conversion.trim());
+					result.put(appenderName, entry);
+				}
+
+			}
+
+			/*
+			 * example: log4j.appender.R=org.apache.log4j.RollingFileAppender
+			 * log4j.appender.R.File=${catalina.base}/logs/tomcat.log
+			 * log4j.appender.R.MaxFileSize=10MB
+			 * log4j.appender.R.MaxBackupIndex=10
+			 * log4j.appender.R.layout=org.apache.log4j.PatternLayout
+			 * log4j.appender.R.layout.ConversionPattern=%d - %p %t %c - %m%n
+			 */
+		} catch (IOException ioe) {
+		} finally {
+			if (inputStream != null) {
+				inputStream.close();
+			}
+		}
+		// don't return null
+		return result;
+	}
+}
+
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.StringTokenizer;
+import java.util.regex.MatchResult;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.spi.LocationInfo;
+import org.apache.log4j.spi.LoggingEvent;
+import org.apache.log4j.spi.ThrowableInformation;
+import org.slf4j.LoggerFactory;
+
+/**
+ * - tailing may fail if the file rolls over.
+ * <p>
+ * <b>Example receiver configuration settings</b> (add these as params, specifying a LogFilePatternReceiver
+ * 'plugin'):<br>
+ * param: "timestampFormat" value="yyyy-MM-d HH:mm:ss,SSS"<br>
+ * param: "logFormat" value="PROP(RELATIVETIME) [THREAD] LEVEL LOGGER * - MESSAGE"<br>
+ * param: "fileURL" value="file:///c:/events.log"<br>
+ * param: "tailing" value="true"
+ * <p>
+ * 
+ */
+public abstract class LogFilePatternReceiver {
+    private org.slf4j.Logger logger = LoggerFactory.getLogger(getClass());
+    
+    private final List keywords = new ArrayList();
+
+    private static final String PROP_START = "PROP(";
+    private static final String PROP_END = ")";
+
+    private static final String LOGGER = "LOGGER";
+    private static final String MESSAGE = "MESSAGE";
+    private static final String TIMESTAMP = "TIMESTAMP";
+    private static final String NDC = "NDC";
+    private static final String LEVEL = "LEVEL";
+    private static final String THREAD = "THREAD";
+    private static final String CLASS = "CLASS";
+    private static final String FILE = "FILE";
+    private static final String LINE = "LINE";
+    private static final String METHOD = "METHOD";
+    private static final String NEWLINE = "(LF)";
+
+    private static final String DEFAULT_HOST = "file";
+
+    // all lines other than first line of exception begin with tab followed by 'at' followed by text
+    private static final String EXCEPTION_PATTERN = "^\\s+at.*";
+    private static final String REGEXP_DEFAULT_WILDCARD = ".*?";
+    private static final String REGEXP_GREEDY_WILDCARD = ".*";
+    private static final String PATTERN_WILDCARD = "*";
+    // pull in optional leading and trailing spaces
+    private static final String NOSPACE_GROUP = "(\\s*?\\S*?\\s*?)";
+    private static final String DEFAULT_GROUP = "(" + REGEXP_DEFAULT_WILDCARD + ")";
+    private static final String GREEDY_GROUP = "(" + REGEXP_GREEDY_WILDCARD + ")";
+    private static final String MULTIPLE_SPACES_REGEXP = "[ ]+";
+    private static final String NEWLINE_REGEXP = "\n";
+    private final String newLine = System.getProperty("line.separator");
+
+    private final String[] emptyException = new String[] {
+        ""
+    };
+
+    private SimpleDateFormat dateFormat;
+    private String timestampFormat = "yyyy-MM-d HH:mm:ss,SSS";
+    private String logFormat;
+    private String customLevelDefinitions;
+    private String filterExpression;
+
+    private static final String VALID_DATEFORMAT_CHARS = "GyMwWDdFEaHkKhmsSzZ";
+    private static final String VALID_DATEFORMAT_CHAR_PATTERN = "[" + VALID_DATEFORMAT_CHARS + "]";
+
+    //private Rule expressionRule;
+
+    private Map currentMap;
+    private List additionalLines;
+    private List matchingKeywords;
+
+    private String regexp;
+    //private Reader reader;
+    private Pattern regexpPattern;
+    private Pattern exceptionPattern;
+    private String timestampPatternText;
+
+    private boolean appendNonMatches;
+    private final Map customLevelDefinitionMap = new HashMap();
+
+    // default to one line - this number is incremented for each (LF) found in the logFormat
+    private int lineCount = 1;
+
+    public LogFilePatternReceiver() {
+        keywords.add(TIMESTAMP);
+        keywords.add(LOGGER);
+        keywords.add(LEVEL);
+        keywords.add(THREAD);
+        keywords.add(CLASS);
+        keywords.add(FILE);
+        keywords.add(LINE);
+        keywords.add(METHOD);
+        keywords.add(MESSAGE);
+        keywords.add(NDC);
+        try {
+            exceptionPattern = Pattern.compile(EXCEPTION_PATTERN);
+        } catch (PatternSyntaxException pse) {
+            // shouldn't happen
+        }
+    }
+
+    /**
+     * If the log file contains non-log4j level strings, they can be mapped to log4j levels using the format
+     * (android example): V=TRACE,D=DEBUG,I=INFO,W=WARN,E=ERROR,F=FATAL,S=OFF
+     * 
+     * @param customLevelDefinitions the level definition string
+     */
+    public void setCustomLevelDefinitions(String customLevelDefinitions) {
+        this.customLevelDefinitions = customLevelDefinitions;
+    }
+
+    public String getCustomLevelDefinitions() {
+        return customLevelDefinitions;
+    }
+
+    /**
+     * Accessor
+     * 
+     * @return append non matches
+     */
+    public boolean isAppendNonMatches() {
+        return appendNonMatches;
+    }
+
+    /**
+     * Mutator
+     * 
+     * @param appendNonMatches
+     */
+    public void setAppendNonMatches(boolean appendNonMatches) {
+        this.appendNonMatches = appendNonMatches;
+    }
+
+    /**
+     * Accessor
+     * 
+     * @return filter expression
+     */
+    public String getFilterExpression() {
+        return filterExpression;
+    }
+
+    /**
+     * Mutator
+     * 
+     * @param filterExpression
+     */
+    public void setFilterExpression(String filterExpression) {
+        this.filterExpression = filterExpression;
+    }
+
+    /**
+     * Accessor
+     * 
+     * @return log format
+     */
+    public String getLogFormat() {
+        return logFormat;
+    }
+
+    /**
+     * Mutator
+     * 
+     * @param logFormat the format
+     */
+    public void setLogFormat(String logFormat) {
+        this.logFormat = logFormat;
+    }
+
+    /**
+     * Mutator. Specify a pattern from {@link java.text.SimpleDateFormat}
+     * 
+     * @param timestampFormat
+     */
+    public void setTimestampFormat(String timestampFormat) {
+        this.timestampFormat = timestampFormat;
+    }
+
+    /**
+     * Accessor
+     * 
+     * @return timestamp format
+     */
+    public String getTimestampFormat() {
+        return timestampFormat;
+    }
+
+    /**
+     * Walk the additionalLines list, looking for the EXCEPTION_PATTERN.
+     * <p>
+     * Return the index of the first matched line (the match may be the 1st line of an exception)
+     * <p>
+     * Assumptions: <br>
+     * - the additionalLines list may contain both message and exception lines<br>
+     * - message lines are added to the additionalLines list and then exception lines (all message lines occur
+     * in the list prior to all exception lines)
+     * 
+     * @return -1 if no exception line exists, line number otherwise
+     */
+    private int getExceptionLine() {
+        for (int i = 0; i < additionalLines.size(); i++) {
+            Matcher exceptionMatcher = exceptionPattern.matcher((String)additionalLines.get(i));
+            if (exceptionMatcher.matches()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Combine all message lines occuring in the additionalLines list, adding a newline character between each
+     * line
+     * <p>
+     * the event will already have a message - combine this message with the message lines in the
+     * additionalLines list (all entries prior to the exceptionLine index)
+     * 
+     * @param firstMessageLine primary message line
+     * @param exceptionLine index of first exception line
+     * @return message
+     */
+    private String buildMessage(String firstMessageLine, int exceptionLine) {
+        if (additionalLines.size() == 0) {
+            return firstMessageLine;
+        }
+        StringBuffer message = new StringBuffer();
+        if (firstMessageLine != null) {
+            message.append(firstMessageLine);
+        }
+
+        int linesToProcess = (exceptionLine == -1 ? additionalLines.size() : exceptionLine);
+
+        for (int i = 0; i < linesToProcess; i++) {
+            message.append(newLine);
+            message.append(additionalLines.get(i));
+        }
+        return message.toString();
+    }
+
+    /**
+     * Combine all exception lines occuring in the additionalLines list into a String array
+     * <p>
+     * (all entries equal to or greater than the exceptionLine index)
+     * 
+     * @param exceptionLine index of first exception line
+     * @return exception
+     */
+    private String[] buildException(int exceptionLine) {
+        if (exceptionLine == -1) {
+            return emptyException;
+        }
+        String[] exception = new String[additionalLines.size() - exceptionLine - 1];
+        for (int i = 0; i < exception.length; i++) {
+            exception[i] = (String)additionalLines.get(i + exceptionLine);
+        }
+        return exception;
+    }
+
+    /**
+     * Construct a logging event from currentMap and additionalLines (additionalLines contains multiple
+     * message lines and any exception lines)
+     * <p>
+     * CurrentMap and additionalLines are cleared in the process
+     * 
+     * @return event
+     */
+    private LoggingEvent buildEvent() {
+        if (currentMap.size() == 0) {
+            if (additionalLines.size() > 0) {
+                for (Iterator iter = additionalLines.iterator(); iter.hasNext();) {
+                    getLogger().info("found non-matching line: " + iter.next());
+                }
+            }
+            additionalLines.clear();
+            return null;
+        }
+        // the current map contains fields - build an event
+        int exceptionLine = getExceptionLine();
+        String[] exception = buildException(exceptionLine);
+
+        // messages are listed before exceptions in additionallines
+        if (additionalLines.size() > 0 && exception.length > 0) {
+            currentMap.put(MESSAGE, buildMessage((String)currentMap.get(MESSAGE), exceptionLine));
+        }
+        LoggingEvent event = convertToEvent(currentMap, exception);
+        currentMap.clear();
+        additionalLines.clear();
+        return event;
+    }
+
+    /**
+     * Read, parse and optionally tail the log file, converting entries into logging events. A
+     * runtimeException is thrown if the logFormat pattern is malformed.
+     * 
+     * @param bufferedReader
+     * @throws IOException
+     */
+    protected void process(BufferedReader bufferedReader) throws IOException {
+        Matcher eventMatcher;
+        Matcher exceptionMatcher;
+        String line;
+        // if newlines are provided in the logFormat - (LF) - combine the lines prior to matching
+        while ((line = bufferedReader.readLine()) != null) {
+            // there is already one line (read above, start i at 1
+            for (int i = 1; i < lineCount; i++) {
+                String thisLine = bufferedReader.readLine();
+                if (thisLine != null) {
+                    line = line + newLine + thisLine;
+                }
+            }
+            eventMatcher = regexpPattern.matcher(line);
+            // skip empty line entries
+            if (line.trim().equals("")) {
+                continue;
+            }
+            exceptionMatcher = exceptionPattern.matcher(line);
+            if (eventMatcher.matches()) {
+                // build an event from the previous match (held in current map)
+                LoggingEvent event = buildEvent();
+                if (event != null) {
+                    if (passesExpression(event)) {
+                        doPost(event);
+                    }
+                }
+                currentMap.putAll(processEvent(eventMatcher.toMatchResult()));
+            } else if (exceptionMatcher.matches()) {
+                // an exception line
+                additionalLines.add(line);
+            } else {
+                // neither...either post an event with the line or append as additional lines
+                // if this was a logging event with multiple lines, each line will show up as its own event
+                // instead of being
+                // appended as multiple lines on the same event..
+                // choice is to have each non-matching line show up as its own line, or append them all to a
+                // previous event
+                if (appendNonMatches) {
+                    // hold on to the previous time, so we can do our best to preserve time-based ordering if
+                    // the event is a non-match
+                    String lastTime = (String)currentMap.get(TIMESTAMP);
+                    // build an event from the previous match (held in current map)
+                    if (currentMap.size() > 0) {
+                        LoggingEvent event = buildEvent();
+                        if (event != null) {
+                            if (passesExpression(event)) {
+                                doPost(event);
+                            }
+                        }
+                    }
+                    if (lastTime != null) {
+                        currentMap.put(TIMESTAMP, lastTime);
+                    }
+                    currentMap.put(MESSAGE, line);
+                } else {
+                    additionalLines.add(line);
+                }
+            }
+        }
+
+        // process last event if one exists
+        LoggingEvent event = buildEvent();
+        if (event != null) {
+            if (passesExpression(event)) {
+                doPost(event);
+            }
+        }
+    }
+    
+    public abstract void doPost(final LoggingEvent event);
+    
+    protected void createPattern() {
+        regexpPattern = Pattern.compile(regexp);
+    }
+
+    /**
+     * Helper method that supports the evaluation of the expression
+     * 
+     * @param event
+     * @return true if expression isn't set, or the result of the evaluation otherwise
+     */
+    private boolean passesExpression(LoggingEvent event) {
+//        if (event != null) {
+//            if (expressionRule != null) {
+//                return (expressionRule.evaluate(event, null));
+//            }
+//        }
+        return true;
+    }
+
+    /**
+     * Convert the match into a map.
+     * <p>
+     * Relies on the fact that the matchingKeywords list is in the same order as the groups in the regular
+     * expression
+     * 
+     * @param result
+     * @return map
+     */
+    private Map processEvent(MatchResult result) {
+        Map map = new HashMap();
+        // group zero is the entire match - process all other groups
+        for (int i = 1; i < result.groupCount() + 1; i++) {
+            Object key = matchingKeywords.get(i - 1);
+            Object value = result.group(i);
+            map.put(key, value);
+
+        }
+        return map;
+    }
+
+    /**
+     * Helper method that will convert timestamp format to a pattern
+     * 
+     * @return string
+     */
+    private String convertTimestamp() {
+        // some locales (for example, French) generate timestamp text with characters not included in \w -
+        // now using \S (all non-whitespace characters) instead of /w
+        String result = timestampFormat.replaceAll(VALID_DATEFORMAT_CHAR_PATTERN + "+", "\\\\S+");
+        // make sure dots in timestamp are escaped
+        result = result.replaceAll(Pattern.quote("."), "\\\\.");
+        return result;
+    }
+
+    /**
+     * Build the regular expression needed to parse log entries
+     */
+    protected void initialize() {
+        currentMap = new HashMap();
+        additionalLines = new ArrayList();
+        matchingKeywords = new ArrayList();
+
+        if (timestampFormat != null) {
+            dateFormat = new SimpleDateFormat(quoteTimeStampChars(timestampFormat));
+            timestampPatternText = convertTimestamp();
+        }
+        // if custom level definitions exist, parse them
+        updateCustomLevelDefinitionMap();
+//        try {
+//            if (filterExpression != null) {
+//                expressionRule = ExpressionRule.getRule(filterExpression);
+//            }
+//        } catch (Exception e) {
+//            getLogger().warn("Invalid filter expression: " + filterExpression, e);
+//        }
+
+        List buildingKeywords = new ArrayList();
+
+        String newPattern = logFormat;
+
+        // process line feeds - (LF) - in the logFormat - before processing properties
+        int index = 0;
+        while (index > -1) {
+            index = newPattern.indexOf(NEWLINE);
+            if (index > -1) {
+                // keep track of number of expected newlines in the format, so the lines can be concatenated
+                // prior to matching
+                lineCount++;
+                newPattern = singleReplace(newPattern, NEWLINE, NEWLINE_REGEXP);
+            }
+        }
+
+        String current = newPattern;
+        // build a list of property names and temporarily replace the property with an empty string,
+        // we'll rebuild the pattern later
+        List propertyNames = new ArrayList();
+        index = 0;
+        while (index > -1) {
+            if (current.indexOf(PROP_START) > -1 && current.indexOf(PROP_END) > -1) {
+                index = current.indexOf(PROP_START);
+                String longPropertyName = current.substring(current.indexOf(PROP_START),
+                                                            current.indexOf(PROP_END) + 1);
+                String shortProp = getShortPropertyName(longPropertyName);
+                buildingKeywords.add(shortProp);
+                propertyNames.add(longPropertyName);
+                current = current.substring(longPropertyName.length() + 1 + index);
+                newPattern = singleReplace(newPattern, longPropertyName,
+                                           new Integer(buildingKeywords.size() - 1).toString());
+            } else {
+                // no properties
+                index = -1;
+            }
+        }
+
+        /*
+         * we're using a treemap, so the index will be used as the key to ensure keywords are ordered
+         * correctly examine pattern, adding keywords to an index-based map patterns can contain only one of
+         * these per entry...properties are the only 'keyword' that can occur multiple times in an entry
+         */
+        Iterator iter = keywords.iterator();
+        while (iter.hasNext()) {
+            String keyword = (String)iter.next();
+            int index2 = newPattern.indexOf(keyword);
+            if (index2 > -1) {
+                buildingKeywords.add(keyword);
+                newPattern = singleReplace(newPattern, keyword,
+                                           new Integer(buildingKeywords.size() - 1).toString());
+            }
+        }
+
+        String buildingInt = "";
+
+        for (int i = 0; i < newPattern.length(); i++) {
+            String thisValue = String.valueOf(newPattern.substring(i, i + 1));
+            if (isInteger(thisValue)) {
+                buildingInt = buildingInt + thisValue;
+            } else {
+                if (isInteger(buildingInt)) {
+                    matchingKeywords.add(buildingKeywords.get(Integer.parseInt(buildingInt)));
+                }
+                // reset
+                buildingInt = "";
+            }
+        }
+
+        // if the very last value is an int, make sure to add it
+        if (isInteger(buildingInt)) {
+            matchingKeywords.add(buildingKeywords.get(Integer.parseInt(buildingInt)));
+        }
+
+        newPattern = replaceMetaChars(newPattern);
+
+        // compress one or more spaces in the pattern into the [ ]+ regexp
+        // (supports padding of level in log files)
+        newPattern = newPattern.replaceAll(MULTIPLE_SPACES_REGEXP, MULTIPLE_SPACES_REGEXP);
+        newPattern = newPattern.replaceAll(Pattern.quote(PATTERN_WILDCARD), REGEXP_DEFAULT_WILDCARD);
+        // use buildingKeywords here to ensure correct order
+        for (int i = 0; i < buildingKeywords.size(); i++) {
+            String keyword = (String)buildingKeywords.get(i);
+            // make the final keyword greedy (we're assuming it's the message)
+            if (i == (buildingKeywords.size() - 1)) {
+                newPattern = singleReplace(newPattern, String.valueOf(i), GREEDY_GROUP);
+            } else if (TIMESTAMP.equals(keyword)) {
+                newPattern = singleReplace(newPattern, String.valueOf(i), "(" + timestampPatternText + ")");
+            } else if (LOGGER.equals(keyword) || LEVEL.equals(keyword)) {
+                newPattern = singleReplace(newPattern, String.valueOf(i), NOSPACE_GROUP);
+            } else {
+                newPattern = singleReplace(newPattern, String.valueOf(i), DEFAULT_GROUP);
+            }
+        }
+
+        regexp = newPattern;
+        getLogger().debug("regexp is " + regexp);
+    }
+
+    private void updateCustomLevelDefinitionMap() {
+        if (customLevelDefinitions != null) {
+            StringTokenizer entryTokenizer = new StringTokenizer(customLevelDefinitions, ",");
+
+            customLevelDefinitionMap.clear();
+            while (entryTokenizer.hasMoreTokens()) {
+                StringTokenizer innerTokenizer = new StringTokenizer(entryTokenizer.nextToken(), "=");
+                customLevelDefinitionMap.put(innerTokenizer.nextToken(),
+                                             Level.toLevel(innerTokenizer.nextToken()));
+            }
+        }
+    }
+
+    private boolean isInteger(String value) {
+        try {
+            Integer.parseInt(value);
+            return true;
+        } catch (NumberFormatException nfe) {
+            return false;
+        }
+    }
+
+    private String quoteTimeStampChars(String input) {
+        // put single quotes around text that isn't a supported dateformat char
+        StringBuffer result = new StringBuffer();
+        // ok to default to false because we also check for index zero below
+        boolean lastCharIsDateFormat = false;
+        for (int i = 0; i < input.length(); i++) {
+            String thisVal = input.substring(i, i + 1);
+            boolean thisCharIsDateFormat = VALID_DATEFORMAT_CHARS.contains(thisVal);
+            // we have encountered a non-dateformat char
+            if (!thisCharIsDateFormat && (i == 0 || lastCharIsDateFormat)) {
+                result.append("'");
+            }
+            // we have encountered a dateformat char after previously encountering a non-dateformat char
+            if (thisCharIsDateFormat && i > 0 && !lastCharIsDateFormat) {
+                result.append("'");
+            }
+            lastCharIsDateFormat = thisCharIsDateFormat;
+            result.append(thisVal);
+        }
+        // append an end single-quote if we ended with non-dateformat char
+        if (!lastCharIsDateFormat) {
+            result.append("'");
+        }
+        return result.toString();
+    }
+
+    private String singleReplace(String inputString, String oldString, String newString) {
+        int propLength = oldString.length();
+        int startPos = inputString.indexOf(oldString);
+        if (startPos == -1) {
+            getLogger().info("string: " + oldString + " not found in input: " + inputString
+                                 + " - returning input");
+            return inputString;
+        }
+        if (startPos == 0) {
+            inputString = inputString.substring(propLength);
+            inputString = newString + inputString;
+        } else {
+            inputString = inputString.substring(0, startPos) + newString
+                          + inputString.substring(startPos + propLength);
+        }
+        return inputString;
+    }
+
+    private String getShortPropertyName(String longPropertyName) {
+        String currentProp = longPropertyName.substring(longPropertyName.indexOf(PROP_START));
+        String prop = currentProp.substring(0, currentProp.indexOf(PROP_END) + 1);
+        String shortProp = prop.substring(PROP_START.length(), prop.length() - 1);
+        return shortProp;
+    }
+
+    /**
+     * Some perl5 characters may occur in the log file format. Escape these characters to prevent parsing
+     * errors.
+     * 
+     * @param input
+     * @return string
+     */
+    private String replaceMetaChars(String input) {
+        // escape backslash first since that character is used to escape the remaining meta chars
+        input = input.replaceAll("\\\\", "\\\\\\");
+
+        // don't escape star - it's used as the wildcard
+        input = input.replaceAll(Pattern.quote("]"), "\\\\]");
+        input = input.replaceAll(Pattern.quote("["), "\\\\[");
+        input = input.replaceAll(Pattern.quote("^"), "\\\\^");
+        input = input.replaceAll(Pattern.quote("$"), "\\\\$");
+        input = input.replaceAll(Pattern.quote("."), "\\\\.");
+        input = input.replaceAll(Pattern.quote("|"), "\\\\|");
+        input = input.replaceAll(Pattern.quote("?"), "\\\\?");
+        input = input.replaceAll(Pattern.quote("+"), "\\\\+");
+        input = input.replaceAll(Pattern.quote("("), "\\\\(");
+        input = input.replaceAll(Pattern.quote(")"), "\\\\)");
+        input = input.replaceAll(Pattern.quote("-"), "\\\\-");
+        input = input.replaceAll(Pattern.quote("{"), "\\\\{");
+        input = input.replaceAll(Pattern.quote("}"), "\\\\}");
+        input = input.replaceAll(Pattern.quote("#"), "\\\\#");
+        return input;
+    }
+
+    /**
+     * Convert a keyword-to-values map to a LoggingEvent
+     * 
+     * @param fieldMap
+     * @param exception
+     * @return logging event
+     */
+    private LoggingEvent convertToEvent(Map fieldMap, String[] exception) {
+        if (fieldMap == null) {
+            return null;
+        }
+
+        // a logger must exist at a minimum for the event to be processed
+        if (!fieldMap.containsKey(LOGGER)) {
+            fieldMap.put(LOGGER, "Unknown");
+        }
+        if (exception == null) {
+            exception = emptyException;
+        }
+
+        Logger logger = null;
+        long timeStamp = 0L;
+        String level = null;
+        String threadName = null;
+        Object message = null;
+        String ndc = null;
+        String className = null;
+        String methodName = null;
+        String eventFileName = null;
+        String lineNumber = null;
+        Hashtable properties = new Hashtable();
+
+        logger = Logger.getLogger((String)fieldMap.remove(LOGGER));
+
+        if ((dateFormat != null) && fieldMap.containsKey(TIMESTAMP)) {
+            try {
+                timeStamp = dateFormat.parse((String)fieldMap.remove(TIMESTAMP)).getTime();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        // use current time if timestamp not parseable
+        if (timeStamp == 0L) {
+            timeStamp = System.currentTimeMillis();
+        }
+
+        message = fieldMap.remove(MESSAGE);
+        if (message == null) {
+            message = "";
+        }
+
+        level = (String)fieldMap.remove(LEVEL);
+        Level levelImpl;
+        if (level == null) {
+            levelImpl = Level.DEBUG;
+        } else {
+            // first try to resolve against custom level definition map, then fall back to regular levels
+            levelImpl = (Level)customLevelDefinitionMap.get(level);
+            if (levelImpl == null) {
+                levelImpl = Level.toLevel(level.trim());
+                if (!level.equals(levelImpl.toString())) {
+                    // check custom level map
+                    if (levelImpl == null) {
+                        levelImpl = Level.DEBUG;
+                        getLogger().debug("found unexpected level: " + level + ", logger: "
+                                              + logger.getName() + ", msg: " + message);
+                        // make sure the text that couldn't match a level is added to the message
+                        message = level + " " + message;
+                    }
+                }
+            }
+        }
+
+        threadName = (String)fieldMap.remove(THREAD);
+
+        ndc = (String)fieldMap.remove(NDC);
+
+        className = (String)fieldMap.remove(CLASS);
+
+        methodName = (String)fieldMap.remove(METHOD);
+
+        eventFileName = (String)fieldMap.remove(FILE);
+
+        lineNumber = (String)fieldMap.remove(LINE);
+
+
+        // all remaining entries in fieldmap are properties
+        properties.putAll(fieldMap);
+
+        LocationInfo info = null;
+
+        if ((eventFileName != null) || (className != null) || (methodName != null) || (lineNumber != null)) {
+            info = new LocationInfo(eventFileName, className, methodName, lineNumber);
+        } else {
+            info = LocationInfo.NA_LOCATION_INFO;
+        }
+
+        LoggingEvent event = new LoggingEvent(null, logger, timeStamp, levelImpl, message, threadName,
+                                              new ThrowableInformation(exception), ndc, info, properties);
+
+        return event;
+    }
+    
+    protected org.slf4j.Logger getLogger() {
+        return logger;
+    }
+}
+
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
+import java.io.Reader;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.input.Tailer;
+import org.apache.commons.io.input.TailerListenerAdapter;
+import org.apache.commons.lang.Validate;
+import org.apache.log4j.spi.LoggingEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class LogFileTailer {
+    private Logger logger = LoggerFactory.getLogger(getClass());
+    private final long pollingMs;
+    private final LogFileParser receiver;
+    private Tailer tailer;
+    private PipedInputStream inputStream;
+    private PipedOutputStream outputStream;
+    
+    public LogFileTailer(final AppenderConfig appenderConfig, 
+                         final long pollingMs,
+                         final LogDataHandler collector) {
+        
+        Validate.notNull(appenderConfig);
+        Validate.isTrue(pollingMs > 0);
+        
+        receiver = new LogFileParser(appenderConfig, collector);
+        this.pollingMs = pollingMs;
+    }
+    
+    public void doTail(final File logFile) throws IOException {
+        final InputStream inputStream = setupTailer(logFile);
+        
+        Thread thread = new Thread() {
+            public void run() {
+                try {
+                    receiver.process(inputStream);
+                } catch(IOException e) {
+                    logger.trace("", e);
+                }
+            }
+        };
+        thread.setDaemon(true);
+        thread.start();
+    }
+    
+    public void stop() {
+        tailer.stop();
+        IOUtils.closeQuietly(inputStream);
+        IOUtils.closeQuietly(outputStream);
+    }
+    
+    private InputStream setupTailer(File logFile) throws IOException {
+        inputStream = new PipedInputStream();
+        outputStream = new PipedOutputStream(inputStream);
+        
+        TailerListenerAdapter listener = new TailerListenerAdapter() {
+            public void handle(String line) {
+                try {
+                    outputStream.write((line + IOUtils.LINE_SEPARATOR).getBytes("UTF-8"));
+                } catch (IOException e) {
+                    logger.trace("", e);
+                }
+            }
+        };
+
+        tailer = new Tailer(logFile, listener, pollingMs, false, true);
+        Thread thread = new Thread(tailer);
+        thread.setDaemon(true);
+        thread.start();
+        
+        return inputStream;
+    }
+}
+
+
+package com.infy.gs.automation.log.parser;
+
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.helpers.Loader;
+import org.apache.log4j.helpers.OptionConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class LoggerUtils {
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoggerUtils.class);
+    
+    private LoggerUtils() {
+    }
+
+    /**
+     * 
+     * 
+     * @return
+     */
+    @SuppressWarnings("deprecation")
+    public static File getLogFileProperties() {
+        String configurationOptionStr = OptionConverter.getSystemProperty(
+               LogManager.DEFAULT_CONFIGURATION_KEY, null);
+
+        URL url = null;
+        if (configurationOptionStr != null) {
+            try {
+                url = new URL(configurationOptionStr);
+            } catch (MalformedURLException ex) {
+                // so, resource is not a URL:
+                // attempt to get the resource from the class path
+                url = Loader.getResource(configurationOptionStr);
+            }
+        } else {
+            url = Loader.getResource(LogManager.DEFAULT_CONFIGURATION_FILE);
+        }
+
+        if (url != null) {
+            File file = new File(url.getFile());
+            LOGGER.debug("Log4j Properties {}", file.getAbsolutePath());
+            
+            return file;
+        } else {
+            throw new IllegalArgumentException("Cannot load " + LogManager.DEFAULT_CONFIGURATION_FILE);
+        }
+    }
+}
+
+package com.infy.gs.automation.util;
+
+/**
+ * @author Tusar
+ */
+public class KafkaProducerConstants {
+	
+	public static final long NO_OF_MESSAGES = 3;
+	public static final int SLEEP_TIME = 3000;
+	public static final String KAFKFA_CLUSTERS = "localhost:9092";
+	public static final int KAFKFA_PORT = 9092;
+	public static final String INPUT_LOG_LOCATION = "/root/kafka/kafka-producer/loginjectkafka/FACTNYCL2-SEGADEQUACY-DAY-REPORT.log";
+	public static final String INPUT_LOG_PROP_LOCATION = "/root/kafka/kafka-producer/loginjectkafka/log4j.properties";
+	public static final int KAKFA_PARTITION = 0;
+	public static final String KAFKFA_TOPIC = "test";
+	public static final long TAIL_CHECK_INTERVAL = 3000;
+	public static final int MINUTE_ROUND_INTERVAL = 30; //value should not exceed 30 as there can not be round to hour
+}
+
+pom
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>KafkaErrorLogProducer</groupId>
+	<artifactId>KafkaErrorLogProducer</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<build>
+		<sourceDirectory>src</sourceDirectory>
+		<plugins>
+			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.1</version>
+				<configuration>
+					<source>1.8</source>
+					<target>1.8</target>
+				</configuration>
+			</plugin>
+      			 <plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.2.1</version>
+				<executions>
+					<execution>
+						<id>gs-poc</id>
+						<phase>test</phase>
+						<goals>
+							<goal>java</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<mainClass>com.infy.gs.automation.log.produce.KafkaLogReader</mainClass>
+					<executable>java</executable>
+					<arguments>
+						<argument>-classpath</argument>
+						<argument>target/classes</argument>
+						<argument>com.infy.gs.automation.log.produce.KafkaLogReader</argument>
+					</arguments>
+				</configuration>
+			</plugin>  
+		</plugins>
+	</build>
+	<dependencies>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
+<dependency>
+	<groupId>com.google.code.gson</groupId>
+	<artifactId>gson</artifactId>
+	<version>2.3.1</version>
+</dependency>
+
+	
+		<dependency>
+			<groupId>com.googlecode.json-simple</groupId>
+			<artifactId>json-simple</artifactId>
+			<version>1.1.1</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-core_2.10</artifactId>
+			<version>1.3.1</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.10</artifactId>
+            <version>1.3.1</version>
+        </dependency>
+   		<dependency>
+      		<groupId>org.apache.spark</groupId>
+      		<artifactId>spark-mllib_2.10</artifactId>
+      		<version>1.3.1</version>
+    	</dependency>		
+		
+		<!-- MongoDB -->
+		
+		  <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>casbah-commons_2.10</artifactId>
+        <version>2.8.0</version>
+    </dependency>
+  <dependency>
+	<groupId>org.mongodb</groupId>
+	<artifactId>mongo-java-driver</artifactId>
+	<version>2.13.0</version>
+</dependency>
+
+    
+    <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>casbah-query_2.10</artifactId>
+        <version>2.8.0</version>
+    </dependency>
+    <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>casbah-core_2.10</artifactId>
+        <version>2.8.0</version>
+    </dependency>
+    <dependency>
+        <groupId>de.flapdoodle.embed</groupId>
+        <artifactId>de.flapdoodle.embed.mongo</artifactId>
+        <version>1.46.4</version>
+        <scope>test</scope>
+    </dependency>
+		<dependency>
+	<groupId>org.mongodb</groupId>
+	<artifactId>mongo-hadoop-core</artifactId>
+	<version>1.3.0</version>
+</dependency>
+		
+			
+		
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-streaming_2.10</artifactId>
+			<version>1.3.1</version>	
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+			</exclusions>		
+		</dependency>
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-streaming-kafka_2.10</artifactId>
+			<version>1.3.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-logging</groupId>
+			<artifactId>commons-logging</artifactId>
+			<version>1.1.3</version>
+		</dependency>
+		<dependency>
+			<groupId>net.sf.jopt-simple</groupId>
+			<artifactId>jopt-simple</artifactId>
+			<version>3.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>14.0.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-framework</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-log4j12</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-recipes</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+			</exclusions>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-test</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.testng</groupId>
+					<artifactId>testng</artifactId>
+				</exclusion>
+			</exclusions>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka_2.10</artifactId>
+			<version>0.8.2.1</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.zookeeper</groupId>
+					<artifactId>zookeeper</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>1.7.4</version>
+		</dependency>
+	<dependency>
+		<groupId>org.scala-lang</groupId>
+		<artifactId>scala-library</artifactId>
+		<version>2.10.4</version>
+	</dependency>
+
+		<dependency>
+			<groupId>com.msiops.footing</groupId>
+			<artifactId>footing-tuple</artifactId>
+			<version>0.2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-cli</groupId>
+			<artifactId>commons-cli</artifactId>
+			<version>1.2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.4</version>
+		</dependency>
+
+	</dependencies>
+
+</project>
+
+
+log.txt
+
+
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+	at org.hibernate.exception.SQLStateConverter.convert(SQLStateConverter.java:107) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.exception.JDBCExceptionHelper.convert(JDBCExceptionHelper.java:66) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.Loader.loadEntity(Loader.java:2041) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.AbstractEntityLoader.load(AbstractEntityLoader.java:86) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.AbstractEntityLoader.load(AbstractEntityLoader.java:76) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.AbstractEntityLoader.load(AbstractEntityLoader.java:69) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.entity.BatchingEntityLoader.load(BatchingEntityLoader.java:113) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.entity.AbstractEntityPersister.load(AbstractEntityPersister.java:3293) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.event.def.DefaultLoadEventListener.loadFromDataSource(DefaultLoadEventListener.java:496) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.event.def.DefaultLoadEventListener.doLoad(DefaultLoadEventListener.java:477) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.event.def.DefaultLoadEventListener.load(DefaultLoadEventListener.java:277) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.event.def.DefaultLoadEventListener.proxyOrLoad(DefaultLoadEventListener.java:285) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.event.def.DefaultLoadEventListener.onLoad(DefaultLoadEventListener.java:152) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.impl.SessionImpl.fireLoad(SessionImpl.java:1090) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.impl.SessionImpl.get(SessionImpl.java:1005) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.impl.SessionImpl.get(SessionImpl.java:998) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at com.gs.factory.persistence.hibernate.GenericDAOImpl.get(GenericDAOImpl.java:60) ~[persistence-6.7.0.1.jar:na]
+	at com.gs.factory.corona.reports.bony.segadequacy.SedAdequacyProcess.findSplPosition(SedAdequacyProcess.java:319) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.corona.reports.bony.segadequacy.SedAdequacyProcess.populateTotalSegAdequate(SedAdequacyProcess.java:283) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.corona.reports.bony.segadequacy.SedAdequacyProcess.groupCandidates(SedAdequacyProcess.java:257) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.corona.reports.bony.segadequacy.SedAdequacyReport.createReport(SedAdequacyProcess.java:49) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.corona.reports.ReportGenerator$1.call(ReportGenerator.java:46) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.corona.reports.ReportGenerator$1.call(ReportGenerator.java:43) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.ste.STEUtils.doTransaction(STEUtils.java:192) ~[ste-6.7.0.1.jar:na]	
+	at com.gs.factory.corona.reports.ReportGenerator.process(ReportGenerator.java:43) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.corona.batch.CoronaBatchApplicationBatch.run(CoronaBatchApplicationBatch.java:95) ~[corona-app-4.3.0.5.jar:na]
+	at com.gs.factory.common.foundation.GSApplication.start(GSApplication.java:142) ~[common-6.7.0.1.jar:na]
+	at com.gs.factory.corona.reports.bony.segadequacy.SedAdequacyReport.main(SedAdequacyProcess.java:37) ~[corona-app-4.3.0.5.jar:na]
+Caused by: com.ibm.db2.jcc.b.SQLException: the current traansaction has been rolled back because of deadlock or timeout. Reason code"68".
+	at com.ibm.db2.jcc.b.yg.b(yg.java:3046) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.c.eb.h(eb.java:268) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.c.eb.a(eb.java:229) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.c.eb.c(eb.java:33) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.c.u.a(u.java:34) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.c.j.lb(j.java:257) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.b.yg.Q(yg.java:2896) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.c.d.g(d.java:1444) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.b.eb.a(eb.java:191) ~[db2jcc-3.4.65.jar:na]
+	at com.ibm.db2.jcc.b.yg.c(yg.java:274) ~[db2jcc-3.4.65.jar:na]	
+	at com.ibm.db2.jcc.b.yg.next(yg.java:238) ~[db2jcc-3.4.65.jar:na]
+	at org.hibernate.loader.Loader.doQuery(Loader.java:825) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.Loader.doQueryAndInitializeNonLazyCollections(Loader.java:274) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+	at org.hibernate.loader.Loader.loadEntity(Loader.java:2037) ~[hibernate-core-3.6.4.Final.jar:3.6.4.Final]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,013 ERROR [main] com.gs.factory.corona.reports.bony.segadequacy.SegAdequacyReportApplication terminating:caught exception from run method org.hibernate.exception.LockAcquisitionException: could not load an entity: [com.gs.factory.collections.spl.SecuritiesPosition#component[accountId,accountType,businessDate,prodSysynoynm]{prodSynonym=912828K66,businessDate=Friday May 15 00:00:00 EDT 2015,accountId=54513908,accountType=01}]
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-18 07:07:13,017 INFO [Thread-19] org.springframework.context.support.ClassPathXmlApplicationContext Closing CRDDataService ApplicationContext: startup date[Mon May 18 07:01:15 EDT 2015];
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
+2015-05-21 20:23:40,298 WARN[main] com.gs.factory.ste.worker.WorkerGroup worker 'sii-sai-in-1'completed with exception
 
 
 -------------------------
@@ -2848,3 +5800,559 @@ class AlertsDTreeWordToVecMultiColumns implements Serializable {
 
 
 ------------
+
+Moving average
+
+package com.infy.gs.automation.client;
+
+import java.io.Serializable;
+import java.util.Date;
+
+
+public class AverageBean implements Serializable{
+	
+	public Date currenttime;
+	public Long resourceruntime;
+	public String resourcetype;
+	public Float averageusage;
+	
+	public Date getCurrenttime() {
+		return currenttime;
+	}
+	public void setCurrenttime(Date currenttime) {
+		this.currenttime = currenttime;
+	}
+	public Long getResourceruntime() {
+		return resourceruntime;
+	}
+	public void setResourceruntime(Long resourceruntime) {
+		this.resourceruntime = resourceruntime;
+	}
+	public String getResourcetype() {
+		return resourcetype;
+	}
+	public void setResourcetype(String resourcetype) {
+		this.resourcetype = resourcetype;
+	}
+	public Float getAverageusage() {
+		return averageusage;
+	}
+	public void setAverageusage(Float averageusage) {
+		this.averageusage = averageusage;
+	}
+	public AverageBean(Date currenttime, Long resourceruntime,
+			String resourcetype, Float averageusage) {
+		super();
+		this.currenttime = currenttime;
+		this.resourceruntime = resourceruntime;
+		this.resourcetype = resourcetype;
+		this.averageusage = averageusage;
+	}
+	
+	
+}
+
+
+package com.infy.gs.automation.client;
+
+import java.io.Serializable;
+
+public class AverageCalculator implements Serializable{
+	
+	  public AverageCalculator(int total, int num)
+	  {
+		  total_ = total;
+		  num_ = num; 
+	 }
+	  
+	  public int total_;
+	  public int num_;
+	  
+	  public float avg() {
+		  return total_ / (float) num_;
+	  }
+	  
+
+}
+
+package com.infy.gs.automation.client;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.spark.HashPartitioner;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.api.java.function.VoidFunction;
+import org.apache.spark.streaming.Duration;
+import org.apache.spark.streaming.Time;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+
+
+import com.datastax.spark.connector.cql.CassandraConnector;
+
+
+import static com.datastax.spark.connector.japi.CassandraJavaUtil.*;
+import scala.Tuple2;
+
+public class SparkStream implements Serializable{
+	
+
+    static String query1;
+
+	public static void main(String args[])
+    {
+       
+		long durationInMilliSec = 30000;
+        Map<String,Integer> topicMap = new HashMap<String,Integer>();
+        String[] topic = "test,".split(",");
+        for(String t: topic)
+        {
+            topicMap.put("test", new Integer(1));
+        }
+      
+        
+        SparkConf _sparkConf = new SparkConf().setAppName("KafkaReceiver").setMaster("local[2]").set("spark.driver.host","zeus07").set("spark.driver.port","8080"); 
+       _sparkConf.set("spark.cassandra.connection.host", "localhost");
+        
+       JavaSparkContext sc = new JavaSparkContext(_sparkConf); 
+        
+        JavaStreamingContext jsc = new JavaStreamingContext(sc,
+				new Duration(durationInMilliSec));
+        
+					        
+        
+        JavaPairReceiverInputDStream<String, String> messages = (JavaPairReceiverInputDStream<String, String>) KafkaUtils.createStream(jsc, "localhost:2181","test-consumer-group", topicMap );
+
+        System.out.println("Connection done++++++++++++++");
+        JavaDStream<String> data = messages.map(new Function<Tuple2<String, String>, String>() 
+                                                {
+                                                    public String call(Tuple2<String, String> message)
+                                                    {
+                                                        return message._2();
+                                                    }
+                                                }
+                                          );
+        
+        data.print();
+   
+
+        
+        JavaPairDStream<String, Integer> result = data.mapToPair(
+        		 new PairFunction<String, String, Integer>() {
+         		    public Tuple2<String, Integer> call(String x) {
+         		    	String[] xr = x.split(":");
+         		    	return new Tuple2(xr[0], new Integer(xr[1].replaceFirst("%", "").trim()));
+         		  }
+
+         		});
+        
+
+    
+    
+    Function<Integer, AverageCalculator> createAcc = new Function<Integer, AverageCalculator>() {
+  	  public AverageCalculator call(Integer x) {
+  	    return new AverageCalculator(x, 1);
+  	  }
+  	};
+  	
+  	Function2<AverageCalculator, Integer, AverageCalculator> addAndCount =
+  	  new Function2<AverageCalculator, Integer, AverageCalculator>() {
+  	  public AverageCalculator call(AverageCalculator a, Integer x) {
+  	    a.total_ += x;
+  	    a.num_ += 1;
+  	    return a;
+  	  }
+  	};
+  	
+  	Function2<AverageCalculator, AverageCalculator, AverageCalculator> combine =
+  	  new Function2<AverageCalculator, AverageCalculator, AverageCalculator>() {
+  	  public AverageCalculator call(AverageCalculator a, AverageCalculator b) {
+  	    a.total_ += b.total_;
+  	    a.num_ += b.num_;
+  	    return a;
+  	  }
+  	};
+  	
+  	AverageCalculator initial = new AverageCalculator(0,0);
+  	JavaPairDStream<String, AverageCalculator> avgCounts =
+    		result.combineByKey(createAcc, addAndCount, combine, new HashPartitioner(1));
+  	
+  	
+ 
+  	/*
+
+  	
+  	
+  	
+  	avgCounts.foreach(new Function2<JavaPairRDD<String,AverageCalculator>, Time, Void>() {
+  		
+		@Override
+		public Void call(JavaPairRDD<String, AverageCalculator> values,
+				Time time) throws Exception {
+			
+			values.foreach(new VoidFunction<Tuple2<String, AverageCalculator>> () {
+
+				@Override
+				public void call(Tuple2<String, AverageCalculator> tuple)
+						throws Exception {
+					
+					System.out.println("Counter:%%%%%%%%%%%%%%%%%%%%%%" + tuple._1().trim() + "," + tuple._2().avg());
+					
+										
+				}} );
+			
+			
+		}}); 
+		
+		*/
+  	//com.datastax.driver.core.Cluster cluster = Cluster.builder().addContactPoint("localhost").build(); 				     
+	//com.datastax.driver.core.Session session = cluster.connect("gs");
+  	/*CassandraConnector connector = CassandraConnector.apply(sc.getConf());
+  	Session session = connector.openSession();
+  	
+  	List<JavaPairRDD<String, AverageCalculator>>  averagesRDDList = avgCounts.slice(new Time(System.currentTimeMillis()-durationInMilliSec), new Time(System.currentTimeMillis()));
+    	
+  	for(JavaPairRDD<String, AverageCalculator> averagesRDD :averagesRDDList){
+  		averagesRDD.foreach(new VoidFunction<Tuple2<String, AverageCalculator>> () {
+
+			@Override
+			public void call(Tuple2<String, AverageCalculator> tuple)
+					throws Exception {
+				
+				System.out.println("Counter:%%%%%%%%%%%%%%%%%%%%%%" + tuple._1().trim() + "," + tuple._2().avg());
+				query1 = "INSERT INTO average(currenttime, resourceruntime, resourcetype, averageusage) VALUES("+
+						new Date(System.currentTimeMillis())+","+durationInMilliSec+","+tuple._1().trim()+","+tuple._2().avg()+")";
+				
+				session.execute(query1); 
+									
+			}} );
+		
+	}*/
+  		
+  		
+
+  
+  
+  	
+    //javaFunctions(avgCounts).writerBuilder("gs", "average", mapToRow(AverageBean.class)).saveToCassandra();
+
+  	
+  	
+      result.print();
+      
+      jsc.start();
+      jsc.awaitTermination();
+
+  }
+    
+
+    
+}
+
+
+________________________-------------------------------
+Log saprk
+
+
+package com.infy.spark.consumer;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.spark.HashPartitioner;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFlatMapFunction;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.api.java.function.VoidFunction;
+import org.apache.spark.streaming.Duration;
+import org.apache.spark.streaming.Time;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+
+
+
+
+
+import com.google.common.base.Optional;
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.streaming.Duration;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+
+import scala.Tuple2;
+
+import java.io.Serializable;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
+
+
+
+
+
+
+
+
+import com.infy.spark.utilities.LogPattternMatch;
+
+
+
+
+
+
+
+
+//import static com.datastax.spark.connector.japi.CassandraJavaUtil.*;
+import scala.Tuple2;
+
+public class LogConsumer implements Serializable{
+
+
+	
+	public static void main(String args[])
+	{
+
+		long durationInMilliSec = 30000;		
+		Map<String,Integer> topicMap = new HashMap<String,Integer>();
+
+		String[] topic = "test,".split(",");
+		for(String t: topic)
+		{
+			topicMap.put("test", new Integer(1));
+		}
+
+
+		SparkConf _sparkConf = new SparkConf().setAppName("KafkaReceiver").setMaster("local[2]").set("spark.driver.host","zeus07").set("spark.driver.port","8080"); 
+		_sparkConf.set("spark.cassandra.connection.host", "localhost");
+
+		JavaSparkContext sc = new JavaSparkContext(_sparkConf); 
+
+		JavaStreamingContext jsc = new JavaStreamingContext(sc,	new Duration(durationInMilliSec));	
+
+		 
+		JavaPairReceiverInputDStream<String, String> messages = (JavaPairReceiverInputDStream<String, String>) KafkaUtils.createStream(jsc, "127.0.0.1:2181","test-consumer-group", topicMap );       
+
+		System.out.println("Connection done++++++++++++++");
+		
+		
+		
+
+		
+		JavaPairDStream<String, String> data  = messages.filter(new Function<Tuple2<String, String>, Boolean> (){
+
+			@Override
+			public Boolean call(Tuple2<String, String> arg0) throws Exception {
+
+				//System.out.println("Message "+arg0._2);
+				return (new LogPattternMatch().isExceptionMatch(arg0._2));				
+			}			
+		});	
+		
+
+		JavaDStream<String> exceptionMessages = data.map(new Function<Tuple2<String, String>, String>() {
+
+			public String call(Tuple2<String, String> message) {
+
+				System.out.println("A#############################rg)+Arg1***************** "+message._2);
+				return (new LogPattternMatch().searchException(message._2));				
+			}
+		});
+		
+				
+		JavaPairDStream<String, Integer> exceptionKeyValues = exceptionMessages.mapToPair(new PairFunction<String, String, Integer>() {
+
+			@Override
+			public Tuple2<String, Integer> call(String arg0) throws Exception {				
+				
+
+				System.out.println("888888888888888888888888***************** "+arg0);
+				
+				return new Tuple2<String, Integer>(arg0,1);
+			}
+		});
+
+	
+		
+		JavaPairDStream<String, Integer> exceptionCount = exceptionKeyValues.reduceByKey(new Function2<Integer, Integer, Integer>(){
+
+			@Override
+			public Integer call(Integer arg0, Integer arg1) throws Exception {
+				
+				System.out.println("Arg0+Arg1***************** "+arg0+" "+arg1	);
+				
+				return arg0+arg1;
+			
+			}
+			
+			
+		});
+		
+		
+		exceptionCount.print();				
+	
+		
+			
+		data.print();
+		jsc.start();
+		jsc.awaitTermination();
+
+	}
+	
+	  
+
+
+
+}
+
+
+package com.infy.spark.utilities;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class LogPattternMatch {
+
+	private Map<String,Integer> exceptionCountMap = new LinkedHashMap<String,Integer>();
+
+	public Map<String, Integer> matchAndCount(String line) {
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		while (matcher.find()){
+
+			exceptionName = matcher.group();
+			incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println(exceptionName);
+		}
+		return exceptionCountMap;
+	}
+	
+	public Boolean isExceptionMatch(String line) {
+		
+		Boolean isMAtch = false;
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		while (matcher.find()){
+
+			exceptionName = matcher.group();
+			incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println("______________________________________isExceptionMathch "+exceptionName);
+			isMAtch = true;
+		}
+		//exceptionCountMap.
+		return isMAtch;
+	}
+
+public String searchException(String line) {
+		
+		//Boolean isMAtch = false;
+
+		String pattern = "\\s([a-zA-Z.]*\\.[a-zA-Z.]*Exception)";
+		//String pattern1 = "((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*\\r(?:(.*Exception.*(\\r.*)(\\tat.*\\r)+)))|((?:[a-zA-Z]{3} \\d{1,2}, \\d{4,4} \\d{1,2}:\\d{2}:\\d{2} (AM|PM) (\\(INFO\\)|\\(SEVERE\\)|\\(WARNING\\))).*)";
+
+		Pattern patterns = Pattern.compile(pattern,Pattern.MULTILINE);
+		Matcher matcher = patterns.matcher(line);
+
+		String exceptionName = "";
+
+		if(matcher.find()){
+
+			exceptionName = matcher.group();
+		//	incrementMapCount(exceptionCountMap , exceptionName);
+			System.out.println("Search exception.....................................  "+exceptionName);
+		}
+		//exceptionCountMap.
+		return exceptionName;
+	}
+	
+	public static void main(String[] args) {
+
+		/*String text = "\"Exception in thread \"main\" java.lang.NullPointerException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);"+
+				" Exception in thread \"main\" java.lang.ClassCastException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);"+
+				" Exception in thread \"main\" java.lang.ClassCastException"+
+				"at com.example.myproject.Book.getTitle(Book.java:16)"+
+				"at com.example.myproject.Author.getBookTitles(Author.java:25)"+
+				"at com.example.myproject.Bootstrap.main(Bootstrap.java:14);";
+*/
+		String text = " java.lang.NullPointerException";
+		new LogPattternMatch().matchAndCount(text);
+	}
+
+	private static void incrementMapCount(Map<String,Integer> map, String exceptionName) {
+
+		Integer currentCount = (Integer)map.get(exceptionName);
+
+		if (currentCount == null) {
+
+			map.put(exceptionName, new Integer(1));
+		}
+		else {
+
+			currentCount = new Integer(currentCount.intValue() + 1);
+			map.put(exceptionName,currentCount);
+		}
+	}
+}
+
+---------------------------------
+
+
+
+
+
+

@@ -1379,3 +1379,1472 @@ public class ProcessBean implements Serializable{
 }
 
 
+
+
+-------------------------
+
+
+import java.io.Serializable;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.mllib.clustering.KMeans;
+import org.apache.spark.mllib.clustering.KMeansModel;
+import org.apache.spark.mllib.feature.Word2Vec;
+import org.apache.spark.mllib.feature.Word2VecModel;
+import org.apache.spark.mllib.linalg.DenseVector;
+import org.apache.spark.mllib.linalg.Vector;
+import org.apache.spark.mllib.linalg.Vectors;
+import org.apache.spark.mllib.regression.LabeledPoint;
+import org.apache.spark.mllib.tree.DecisionTree;
+import org.apache.spark.mllib.tree.model.DecisionTreeModel;
+
+import com.infy.gs.automation.beans.AlertBean;
+
+import scala.Tuple2;
+
+
+/**
+ * @author Tusar
+ * 
+ * This class creates a cloud of vectors from words using word2vec.
+ * Then using K-Means clustering it identifies the related words and create new categories. 
+ * This is useful for auto categorization instead of predefined class.
+ * 
+ */
+
+class AlertsKMeansClustering implements Serializable {
+
+	
+	public static void main(String[] args) throws UnknownHostException {
+
+		SparkConf sparkConf = new SparkConf().setAppName("AlertsDTreeMultiColumns")
+				.setMaster("local[2]")
+				.set("spark.driver.allowMultipleContexts", "true")
+				.set("spark.driver.host", "zeus07")
+				.set("spark.driver.port", "8080");
+		JavaSparkContext sc = new JavaSparkContext(sparkConf);
+
+		/*
+		 * Load Trained CSV file
+		 */
+		JavaRDD<String> trainFile = sc
+				.textFile("/root/kafka/kafka-consumer/decisiontree/sample_autosys.csv");
+
+		// convert to JavaPair with a map between category and alert details
+
+		JavaRDD<AlertBean> rowsTrainRDD = trainFile
+				.map(new Function<String, AlertBean>() {
+					public AlertBean call(String line) {
+						//System.out.println("line######################"+line);
+						String[] data = line.split(",");
+						//System.out.println("data######################"+data[2]);
+						Double points = new Double(0);
+						if (data[9] != null && data[9].trim().length() != 0) {
+							try {
+								points = new Double(data[9].trim());
+							} catch (Exception e) {
+								//System.out.println("points#######"+data[8].trim()+"#########"+e.getMessage());
+								return null;
+							}
+						}
+						
+						return new AlertBean(data[0], data[1], data[2],
+								data[3], data[4], data[5], data[6], data[7],data[8],
+								points);
+					}
+
+				});
+
+		// to filter the header from CSV
+		JavaRDD<AlertBean> rowsValuesTrainRDD = rowsTrainRDD
+				.filter(new Function<AlertBean, Boolean>() {
+					@Override
+					public Boolean call(AlertBean bean) throws Exception {
+						if (bean == null) {
+							//System.out.println("Bean False######################");
+							return false;
+						} else {
+							//System.out.println("Bean False######################");
+							return true;
+							
+						}
+					}
+
+				});
+
+		// Need list of all words for creating trained model in Word2Vec
+		JavaRDD<List<String>> trainRdds = rowsValuesTrainRDD
+				.map(new Function<AlertBean, List<String>>() {
+					public List<String> call(AlertBean bean) throws Exception {
+						// multiple columns to be trained
+						String alertDt = clean(bean.getAlertDetail());
+						//System.out.println("alertDt######################"+alertDt);
+						String appName = clean(bean.getApplicationName());
+						//System.out.println(appName);
+						String npoints = bean.getNpoints().toString();
+						String[] words = ArrayUtils.addAll(
+								ArrayUtils.addAll(alertDt.split(" "),
+										appName.split(" ")), npoints.split(" "));
+						return Arrays.asList(words);
+
+					}
+
+				});
+
+		Word2Vec word2Vec = new Word2Vec();
+		Word2VecModel model = word2Vec.fit(trainRdds);
+		
+		// Need list of all words for creating trained model in Word2Vec
+		JavaRDD<Vector> alertVectors = rowsValuesTrainRDD
+				.map(new Function<AlertBean, Vector>() {
+					public Vector call(AlertBean bean) throws Exception {
+						String alertDt = clean(bean.getAlertDetail());
+						String appName = clean(bean.getApplicationName());
+						String npoints = bean.getNpoints().toString();
+						String[] words = ArrayUtils.addAll(
+								ArrayUtils.addAll(alertDt.split(" "),
+										appName.split(" ")), npoints.split(" "));
+						return wordToVector(words, model);
+
+					}
+
+				});
+		
+		JavaPairRDD<AlertBean, Vector> alertPairVectors = rowsValuesTrainRDD
+				.mapToPair(new PairFunction<AlertBean, AlertBean, Vector>() {
+					public Tuple2<AlertBean, Vector> call(AlertBean bean) throws Exception {
+						String alertDt = clean(bean.getAlertDetail());
+						String appName = clean(bean.getApplicationName());
+						String npoints = bean.getNpoints().toString();
+						String[] words = ArrayUtils.addAll(
+								ArrayUtils.addAll(alertDt.split(" "),
+										appName.split(" ")), npoints.split(" "));
+						return new Tuple2<AlertBean, Vector> (bean, wordToVector(words, model));
+
+					}
+
+				});
+		
+		int numClusters = 100;
+		int numIterations = 25;
+
+		KMeansModel clusters = KMeans.train(alertVectors.rdd(), numClusters, numIterations);
+		Double wssse = clusters.computeCost(alertVectors.rdd());
+
+	/*	
+		 val article_membership = title_pairs.map(x => (clusters.predict(x._2), x._1))
+				    val cluster_centers = sc.parallelize(clusters.clusterCenters.zipWithIndex.map{ e => (e._2,e._1)})
+				    val cluster_topics = cluster_centers.mapValues(x => model.findSynonyms(x,5).map(x => x._1))
+
+				    var sample_topic = cluster_topics.take(12)
+				    var sample_members = article_membership.filter(x => x._1 == 6).take(10)
+				    for (i <- 6 until 12) {
+					println("Topic Group #"+i)
+					println(sample_topic(i)._2.mkString(","))
+					println("-----------------------------")
+					sample_members = article_membership.filter(x => x._1 == i).take(10)
+					sample_members.foreach{x => println(x._2.mkString(" "))}
+					println("-----------------------------")
+				    }
+		*/
+
+	}
+
+	
+
+	public static double[] sumArray(double[] m, double[] n) {
+		for (int i = 0; i < m.length; i++) {
+			m[i] = m[i] + n[i];
+		}
+
+		return m;
+	}
+
+	// This is to calculate the average of vectors
+	public static double[] divArray(double[] m, double divisor) {
+		for (int i = 0; i < m.length; i++) {
+			m[i] = m[i] / divisor;
+		}
+		return m;
+	}
+
+	public static Vector wordToVector(String w, Word2VecModel model) {
+		try {
+			return model.transform(w);
+		} catch (Exception e) {
+			return Vectors.zeros(100);
+		}
+	}
+
+	public static Vector wordToVector(String[] ws, Word2VecModel model) {
+		double[] totalSum = wordToVector(ws[0], model).toArray();
+		for (int i = 1; i < ws.length; i++) {
+			totalSum = sumArray(totalSum, wordToVector(ws[i], model).toArray());
+
+		}
+		divArray(totalSum, ws.length);
+		return new DenseVector(divArray(totalSum, ws.length));
+
+	}
+	
+	/* clean the punctuation, stop words and numbers, remove extra space
+	 *	and convert to lower case
+	 */
+	public static String clean(String a){
+		if(a != null){
+			return a.replaceAll("[^a-zA-Z\\s]", "").replaceAll("\\s+", " ").toLowerCase();
+		}else{
+			return "";
+		}
+			
+	}
+
+}
+
+-----------------------
+
+import java.io.Serializable;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+
+
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.mllib.classification.NaiveBayes;
+import org.apache.spark.mllib.classification.NaiveBayesModel;
+import org.apache.spark.mllib.feature.HashingTF;
+import org.apache.spark.mllib.regression.LabeledPoint;
+import org.apache.spark.mllib.tree.DecisionTree;
+import org.apache.spark.mllib.tree.model.DecisionTreeModel;
+
+import scala.Tuple2;
+
+
+class AlertDTreeHashTFClassifier implements Serializable {
+
+	/**
+	 * Create one Map to assign numeric value to predefined categories.
+	 */
+	static final Map<String, Double> Category = new HashMap<String, Double>() {
+		{
+			put("JobFailure", 1.0);
+			put("Maxrun", 2.0);
+			put("Capacity", 3.0);
+			put("ProcessBadMessage", 4.0);
+			put("EMS", 5.0);
+			put("", 0.0);
+		}
+	};
+
+	public static void main(String[] args) throws UnknownHostException {
+
+		SparkConf sparkConf = new SparkConf().setAppName("AlertNBClassifier")
+				.setMaster("local[2]")
+				.set("spark.driver.allowMultipleContexts", "true")
+				.set("spark.driver.host", "zeus07")
+				.set("spark.driver.port", "8080");
+		JavaSparkContext sc = new JavaSparkContext(sparkConf);
+		/*
+		 * Hashing term frequency vectorizer with 2k features This will generate
+		 * unique double value for each word
+		 */
+		HashingTF htf = new HashingTF(2000);
+
+		/*
+		 * Load Trained CSV file 
+		 */
+		JavaRDD<String> trainFile = sc
+				.textFile("/root/kafka/kafka-consumer/classification/sample_autosys.csv");
+
+		
+
+	
+
+		// convert to JavaPair with a map between category and alert details
+		@SuppressWarnings("serial")
+		JavaPairRDD<String, String> rowsTrainRDD = trainFile
+				.mapToPair(new PairFunction<String, String, String>() {
+					public Tuple2<String, String> call(String line) {
+						String[] data = line.split(",");
+						return new Tuple2<String, String>(data[1], data[3]);
+					}
+
+				});
+		
+		Tuple2<String, String> headerTrain = rowsTrainRDD.first();
+		
+		//to filter the header from CSV
+		JavaPairRDD<String, String> rowsValuesTrainRDD = rowsTrainRDD.filter(new Function<Tuple2<String, String>, Boolean>(){
+			@Override
+			public Boolean call(Tuple2<String, String> tuple) throws Exception {
+				//System.out.println(headerTrain._1 +":" + tuple._1);
+				if(headerTrain._1 != null && tuple._1 != null && headerTrain._1.equals(tuple._1)){					
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+		});
+		
+		
+		JavaRDD<LabeledPoint> trainPoints = rowsValuesTrainRDD.map(
+
+		new Function<Tuple2<String, String>, LabeledPoint>() {
+
+			// clean the punctuation, stop words and numbers, remove extra space
+			// and convert to lower case
+			public LabeledPoint call(Tuple2<String, String> tuple)
+					throws Exception {
+				
+					String alertDt = tuple._2.replaceAll("[^a-zA-Z\\s]", "")
+						.replaceAll("\\s+", " ").toLowerCase();
+					//System.out.println(tuple._1+":"+ Category.get(tuple._1));
+					return new LabeledPoint(Category.get(tuple._1), htf
+						.transform(Arrays.asList(alertDt.split(" "))));
+				
+			}
+
+		});
+
+		JavaRDD<String> testFile = sc.textFile("/root/kafka/kafka-consumer/classification/test_data2.csv");		
+
+		// convert to JavaPair
+		@SuppressWarnings("serial")
+		JavaPairRDD<String, String> rowsTestRDD = testFile
+				.mapToPair(new PairFunction<String, String, String>() {
+					public Tuple2<String, String> call(String line) {
+						String[] data = line.split(",");
+						return new Tuple2<String, String>(data[1], data[3]);
+					}
+
+				});
+		
+		Tuple2<String, String> headerTest = rowsTestRDD.first();
+		
+		//to filter the header from CSV
+		JavaPairRDD<String, String> rowsValuesTestRDD = rowsTestRDD.filter(new Function<Tuple2<String, String>, Boolean>(){
+			@Override
+			public Boolean call(Tuple2<String, String> tuple) throws Exception {
+			//System.out.println(headerTest._1 +":" + tuple._1);
+				if(headerTest._1 != null && tuple._1 != null && headerTest._1.equals(tuple._1)){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+		});
+
+		JavaPairRDD<String, LabeledPoint> testPoints = rowsValuesTestRDD
+				.mapToPair(new PairFunction<Tuple2<String, String>, String, LabeledPoint>() {
+					@Override
+					public Tuple2<String, LabeledPoint> call(
+							Tuple2<String, String> labelAlerts)
+							throws Exception {
+						
+						String alertDt = labelAlerts._2
+								.replaceAll("[^a-zA-Z\\s]", "")
+								.replaceAll("\\s+", " ").toLowerCase();
+						//System.out.println("alertDt test" + alertDt);
+						//System.out.println(" tranform -"+htf.transform(Arrays.asList(alertDt.split(" "))).toArray());
+						return new Tuple2<String, LabeledPoint>(labelAlerts._2,
+								new LabeledPoint(0.0, htf.transform(Arrays
+										.asList(alertDt.split(" ")))));
+						
+					}
+
+				});
+		
+		// Train a DecisionTree model for classification.
+		Integer numClasses = 10; //this value depends on the Hashmap size for predefined categories
+		Map<Integer, Integer> categoricalFeaturesInfo = new HashMap<Integer, Integer>(); //empty value means features are dynamic
+		String impurity = "gini";
+		Integer maxDepth = 5;
+		Integer maxBins = 32; //more value makes to consider more split values for fine-grained split decisions
+
+		final DecisionTreeModel model = DecisionTree.trainClassifier(trainPoints, numClasses,
+				  categoricalFeaturesInfo, impurity, maxDepth, maxBins);
+
+
+		JavaPairRDD<String, Double> predictionAndLabel = testPoints
+				.mapToPair(new PairFunction<Tuple2<String, LabeledPoint>, String, Double>() {
+					@Override
+					public Tuple2<String, Double> call(
+							Tuple2<String, LabeledPoint> tuple) {
+						//System.out.println("After prediction "+model.predict(tuple._2.features()));
+						return new Tuple2<String, Double>(tuple._1, model
+								.predict(tuple._2.features()));
+					}
+				});
+
+		List<Tuple2<String, Double>> alertCategoryList = predictionAndLabel
+				.collect();
+
+		for (Tuple2<String, Double> tuple : alertCategoryList) {
+			System.out.println("Alert :" + tuple._1 + " , Category :"
+					+ getKeyByValue(tuple._2));
+		}
+
+	}
+	
+	public static  String getKeyByValue( Double value) {
+	    for (Entry<String, Double> entry : Category.entrySet()) {
+	        if (value.doubleValue() == entry.getValue().doubleValue()) {
+	            return entry.getKey();
+	        }
+	    }
+	    return null;
+	}
+
+}
+
+
+
+-----------------
+
+
+import java.io.Serializable;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.mllib.classification.NaiveBayes;
+import org.apache.spark.mllib.classification.NaiveBayesModel;
+import org.apache.spark.mllib.feature.HashingTF;
+import org.apache.spark.mllib.regression.LabeledPoint;
+
+import scala.Tuple2;
+
+
+class AlertNBClassifier implements Serializable {
+
+	/**
+	 * Create one Map to assign numeric value to predefined categories.
+	 */
+	static final Map<String, Double> Category = new HashMap<String, Double>() {
+		{
+			put("JobFailure", 1.0);
+			put("Maxrun", 2.0);
+			put("Capacity", 3.0);
+			put("ProcessBadMessage", 4.0);
+			put("EMS", 5.0);
+			put("", 0.0);
+		}
+	};
+
+	public static void main(String[] args) throws UnknownHostException {
+
+		SparkConf sparkConf = new SparkConf().setAppName("AlertNBClassifier")
+				.setMaster("local[2]")
+				.set("spark.driver.allowMultipleContexts", "true")
+				.set("spark.driver.host", "zeus07")
+				.set("spark.driver.port", "8080");
+		JavaSparkContext sc = new JavaSparkContext(sparkConf);
+		/*
+		 * Hashing term frequency vectorizer with 2k features This will generate
+		 * unique double value for each word
+		 */
+		HashingTF htf = new HashingTF(2000);
+
+		/*
+		 * Load Trained CSV file 
+		 */
+		JavaRDD<String> trainFile = sc
+				.textFile("/root/kafka/kafka-consumer/classification/sample_autosys.csv");
+
+		
+
+	
+
+		// convert to JavaPair with a map between category and alert details
+		@SuppressWarnings("serial")
+		JavaPairRDD<String, String> rowsTrainRDD = trainFile
+				.mapToPair(new PairFunction<String, String, String>() {
+					public Tuple2<String, String> call(String line) {
+						String[] data = line.split(",");
+						return new Tuple2<String, String>(data[1], data[3]);
+					}
+
+				});
+		
+		Tuple2<String, String> headerTrain = rowsTrainRDD.first();
+		
+		//to filter the header from CSV
+		JavaPairRDD<String, String> rowsValuesTrainRDD = rowsTrainRDD.filter(new Function<Tuple2<String, String>, Boolean>(){
+			@Override
+			public Boolean call(Tuple2<String, String> tuple) throws Exception {
+				//System.out.println(headerTrain._1 +":" + tuple._1);
+				if(headerTrain._1 != null && tuple._1 != null && headerTrain._1.equals(tuple._1)){					
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+		});
+		
+		
+		JavaRDD<LabeledPoint> trainPoints = rowsValuesTrainRDD.map(
+
+		new Function<Tuple2<String, String>, LabeledPoint>() {
+
+			// clean the punctuation, stop words and numbers, remove extra space
+			// and convert to lower case
+			public LabeledPoint call(Tuple2<String, String> tuple)
+					throws Exception {
+				
+					String alertDt = tuple._2.replaceAll("[^a-zA-Z\\s]", "")
+						.replaceAll("\\s+", " ").toLowerCase();
+					//System.out.println(tuple._1+":"+ Category.get(tuple._1));
+					return new LabeledPoint(Category.get(tuple._1), htf
+						.transform(Arrays.asList(alertDt.split(" "))));
+				
+			}
+
+		});
+
+		JavaRDD<String> testFile = sc.textFile("/root/kafka/kafka-consumer/classification/test_data2.csv");		
+
+		// convert to JavaPair
+		@SuppressWarnings("serial")
+		JavaPairRDD<String, String> rowsTestRDD = testFile
+				.mapToPair(new PairFunction<String, String, String>() {
+					public Tuple2<String, String> call(String line) {
+						String[] data = line.split(",");
+						return new Tuple2<String, String>(data[1], data[3]);
+					}
+
+				});
+		
+		Tuple2<String, String> headerTest = rowsTestRDD.first();
+		
+		//to filter the header from CSV
+		JavaPairRDD<String, String> rowsValuesTestRDD = rowsTestRDD.filter(new Function<Tuple2<String, String>, Boolean>(){
+			@Override
+			public Boolean call(Tuple2<String, String> tuple) throws Exception {
+			//System.out.println(headerTest._1 +":" + tuple._1);
+				if(headerTest._1 != null && tuple._1 != null && headerTest._1.equals(tuple._1)){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+		});
+
+		JavaPairRDD<String, LabeledPoint> testPoints = rowsValuesTestRDD
+				.mapToPair(new PairFunction<Tuple2<String, String>, String, LabeledPoint>() {
+					@Override
+					public Tuple2<String, LabeledPoint> call(
+							Tuple2<String, String> labelAlerts)
+							throws Exception {
+						
+						String alertDt = labelAlerts._2
+								.replaceAll("[^a-zA-Z\\s]", "")
+								.replaceAll("\\s+", " ").toLowerCase();
+						//System.out.println("alertDt test" + alertDt);
+						//System.out.println(" tranform -"+htf.transform(Arrays.asList(alertDt.split(" "))).toArray());
+						return new Tuple2<String, LabeledPoint>(labelAlerts._2,
+								new LabeledPoint(0.0, htf.transform(Arrays
+										.asList(alertDt.split(" ")))));
+						
+					}
+
+				});
+
+		final NaiveBayesModel model = NaiveBayes.train(trainPoints.rdd(), 1.0);
+
+		JavaPairRDD<String, Double> predictionAndLabel = testPoints
+				.mapToPair(new PairFunction<Tuple2<String, LabeledPoint>, String, Double>() {
+					@Override
+					public Tuple2<String, Double> call(
+							Tuple2<String, LabeledPoint> tuple) {
+						//System.out.println("After prediction "+model.predict(tuple._2.features()));
+						return new Tuple2<String, Double>(tuple._1, model
+								.predict(tuple._2.features()));
+					}
+				});
+
+		List<Tuple2<String, Double>> alertCategoryList = predictionAndLabel
+				.collect();
+
+		for (Tuple2<String, Double> tuple : alertCategoryList) {
+			System.out.println("Alert :" + tuple._1 + " , Category :"
+					+ getKeyByValue(tuple._2));
+		}
+
+	}
+	
+	public static  String getKeyByValue( Double value) {
+	    for (Entry<String, Double> entry : Category.entrySet()) {
+	        if (value.doubleValue() == entry.getValue().doubleValue()) {
+	            return entry.getKey();
+	        }
+	    }
+	    return null;
+	}
+
+}
+
+
+
+-----------------
+
+import java.io.Serializable;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.mllib.feature.Word2Vec;
+import org.apache.spark.mllib.feature.Word2VecModel;
+import org.apache.spark.mllib.linalg.DenseVector;
+import org.apache.spark.mllib.linalg.Vector;
+import org.apache.spark.mllib.linalg.Vectors;
+import org.apache.spark.mllib.regression.LabeledPoint;
+import org.apache.spark.mllib.tree.DecisionTree;
+import org.apache.spark.mllib.tree.model.DecisionTreeModel;
+
+import scala.Tuple2;
+
+
+class AlertsDTreeWordToVecClassifier implements Serializable {
+
+
+	/**
+	 * Create one Map to assign numeric value to predefined categories.
+	 */
+	static final Map<String, Double> Category = new HashMap<String, Double>() {
+		{
+			put("JobFailure", 1.0);
+			put("Maxrun", 2.0);
+			put("Capacity", 3.0);
+			put("ProcessBadMessage", 4.0);
+			put("EMS", 5.0);
+			put("", 0.0);
+		}
+	};
+
+	public static void main(String[] args) throws UnknownHostException {
+
+		SparkConf sparkConf = new SparkConf().setAppName("AlertNBClassifier")
+				.setMaster("local[2]")
+				.set("spark.driver.allowMultipleContexts", "true")
+				.set("spark.driver.host", "zeus07")
+				.set("spark.driver.port", "8080");
+		JavaSparkContext sc = new JavaSparkContext(sparkConf);
+		
+		
+		
+
+		/*
+		 * Load Trained CSV file 
+		 */
+		JavaRDD<String> trainFile = sc
+				.textFile("/root/kafka/kafka-consumer/classification/sample_autosys.csv");
+
+		
+
+	
+
+		// convert to JavaPair with a map between category and alert details
+		@SuppressWarnings("serial")
+		JavaPairRDD<String, String> rowsTrainRDD = trainFile
+				.mapToPair(new PairFunction<String, String, String>() {
+					public Tuple2<String, String> call(String line) {
+						String[] data = line.split(",");
+						return new Tuple2<String, String>(data[1], data[3]);
+					}
+
+				});
+		
+		Tuple2<String, String> headerTrain = rowsTrainRDD.first();
+		
+		//to filter the header from CSV
+		JavaPairRDD<String, String> rowsValuesTrainRDD = rowsTrainRDD.filter(new Function<Tuple2<String, String>, Boolean>(){
+			@Override
+			public Boolean call(Tuple2<String, String> tuple) throws Exception {
+				//System.out.println(headerTrain._1 +":" + tuple._1);
+				if(headerTrain._1 != null && tuple._1 != null && headerTrain._1.equals(tuple._1)){					
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+		});
+			
+		JavaRDD<String> rdd = trainFile
+				.map(new Function<String, String>() {
+					public  String call(String line) {
+						String[] data = line.split(",");
+						return data[3];
+					}
+
+				});
+		JavaRDD<List<String>> trainRdds = rdd.map(
+				new Function<String, List<String>>() {
+					// clean the punctuation, stop words and numbers, remove extra space
+					// and convert to lower case
+					public List<String> call(String alert)
+							throws Exception {						
+							String alertDt = alert.replaceAll("[^a-zA-Z\\s]", "")
+								.replaceAll("\\s+", " ").toLowerCase();
+							//System.out.println(tuple._1+":"+ Category.get(tuple._1));
+							return Arrays.asList(alertDt.split(" "));
+							
+					}
+
+				});
+		
+		
+		Word2Vec word2Vec = new Word2Vec();
+		Word2VecModel model = word2Vec.fit(trainRdds);
+		
+		JavaRDD<LabeledPoint> trainPoints = rowsValuesTrainRDD.map(
+				new Function<Tuple2<String, String>, LabeledPoint>() {
+
+					// clean the punctuation, stop words and numbers, remove extra space
+					// and convert to lower case
+					public LabeledPoint call(Tuple2<String, String> tuple)
+							throws Exception {						
+							String alertDt = tuple._2.replaceAll("[^a-zA-Z\\s]", "")
+								.replaceAll("\\s+", " ").toLowerCase();
+							//System.out.println(tuple._1+":"+ Category.get(tuple._1));
+							return new LabeledPoint(Category.get(tuple._1), wordToVector(alertDt.split(" ") ,model));
+						
+					}
+
+				});
+		
+		JavaRDD<String> testFile = sc.textFile("/root/kafka/kafka-consumer/classification/test_data2.csv");		
+
+		// convert to JavaPair
+		@SuppressWarnings("serial")
+		JavaPairRDD<String, String> rowsTestRDD = testFile
+				.mapToPair(new PairFunction<String, String, String>() {
+					public Tuple2<String, String> call(String line) {
+						String[] data = line.split(",");
+						return new Tuple2<String, String>(data[1], data[3]);
+					}
+
+				});
+		
+		Tuple2<String, String> headerTest = rowsTestRDD.first();
+		
+		//to filter the header from CSV
+		JavaPairRDD<String, String> rowsValuesTestRDD = rowsTestRDD.filter(new Function<Tuple2<String, String>, Boolean>(){
+			@Override
+			public Boolean call(Tuple2<String, String> tuple) throws Exception {
+			//System.out.println(headerTest._1 +":" + tuple._1);
+				if(headerTest._1 != null && tuple._1 != null && headerTest._1.equals(tuple._1)){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+		});
+
+		JavaPairRDD<String, LabeledPoint> testPoints = rowsValuesTestRDD
+				.mapToPair(new PairFunction<Tuple2<String, String>, String, LabeledPoint>() {
+					@Override
+					public Tuple2<String, LabeledPoint> call(
+							Tuple2<String, String> labelAlerts)
+							throws Exception {
+						
+						String alertDt = labelAlerts._2
+								.replaceAll("[^a-zA-Z\\s]", "")
+								.replaceAll("\\s+", " ").toLowerCase();
+						//System.out.println("alertDt test" + alertDt);
+						//System.out.println(" tranform -"+htf.transform(Arrays.asList(alertDt.split(" "))).toArray());
+											
+						return new Tuple2<String, LabeledPoint>(labelAlerts._2,
+								new LabeledPoint(0.0,wordToVector(alertDt.split(" ") ,model)));
+						
+					}
+
+				});
+		
+		// Train a DecisionTree model for classification.
+		Integer numClasses = 10; //this value depends on the Hashmap size for predefined categories
+		Map<Integer, Integer> categoricalFeaturesInfo = new HashMap<Integer, Integer>(); //empty value means features are dynamic
+		String impurity = "gini";
+		Integer maxDepth = 5;
+		Integer maxBins = 32; //more value makes to consider more split values for fine-grained split decisions
+
+		final DecisionTreeModel dTreeModel = DecisionTree.trainClassifier(trainPoints, numClasses,
+				  categoricalFeaturesInfo, impurity, maxDepth, maxBins);
+
+
+		JavaPairRDD<String, Double> predictionAndLabel = testPoints
+				.mapToPair(new PairFunction<Tuple2<String, LabeledPoint>, String, Double>() {
+					@Override
+					public Tuple2<String, Double> call(
+							Tuple2<String, LabeledPoint> tuple) {
+						//System.out.println("After prediction "+model.predict(tuple._2.features()));
+						return new Tuple2<String, Double>(tuple._1, dTreeModel
+								.predict(tuple._2.features()));
+					}
+				});
+
+		List<Tuple2<String, Double>> alertCategoryList = predictionAndLabel
+				.collect();
+
+		for (Tuple2<String, Double> tuple : alertCategoryList) {
+			System.out.println("Alert :" + tuple._1 + " , Category :"
+					+ getKeyByValue(tuple._2));
+		}
+
+	}
+	
+
+	
+	public static  String getKeyByValue( Double value) {
+	    for (Entry<String, Double> entry : Category.entrySet()) {
+	        if (value.doubleValue() == entry.getValue().doubleValue()) {
+	            return entry.getKey();
+	        }
+	    }
+	    return null;
+	}
+	public static double[] sumArray (double[] m, double[] n) {
+			for(int i=0; i<m.length; i++){
+				m[i] = m[i]+n[i];
+			}
+		    
+		    return m;
+	}
+
+	//This is to calculate the average of vectors
+		public static double[] divArray (double[] m, double divisor) {
+			for(int i=0; i<m.length; i++){
+				m[i] = m[i]/divisor;
+			}
+			return m;
+	  }
+
+	public static Vector wordToVector (String w, Word2VecModel model){
+		    try {
+		      return model.transform(w);
+		    } catch (Exception e){
+		      return Vectors.zeros(100);
+		    }
+		  }
+	
+	public static Vector wordToVector (String[] ws,  Word2VecModel model) {			
+			double[] totalSum = wordToVector(ws[0], model).toArray();
+			for(int i=1; i<ws.length; i++ ){
+				totalSum = sumArray(totalSum , wordToVector(ws[i], model).toArray());				
+				
+			}
+			divArray(totalSum, ws.length);
+			return new DenseVector(divArray(totalSum, ws.length));
+			
+	  }
+	
+}
+
+
+
+-----------------
+
+
+import java.io.Serializable;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.mllib.feature.Word2Vec;
+import org.apache.spark.mllib.feature.Word2VecModel;
+import org.apache.spark.mllib.linalg.DenseVector;
+import org.apache.spark.mllib.linalg.Vector;
+import org.apache.spark.mllib.linalg.Vectors;
+import org.apache.spark.mllib.regression.LabeledPoint;
+import org.apache.spark.mllib.tree.DecisionTree;
+import org.apache.spark.mllib.tree.model.DecisionTreeModel;
+
+
+
+import com.infy.gs.automation.beans.AlertBean;
+
+import scala.Tuple2;
+
+
+/**
+ * @author Tusar
+ * 
+ * This class loads the data from two CSV files, one is for train and another is for test.
+ * The columns selected for creating the decision model (factors) are Application, Alert Detail (both holds text type) 
+ * and NPoints (contains numeric type data).
+ * LabelPoint is map between a class/label(category field) and factors (the above three fields) and used for classification.
+ * In test file, the value of category field is blank as these values will be predicted by DTree model. 
+ * 
+ */
+
+class AlertsDTreeWordToVecMultiColumns implements Serializable {
+
+	/**
+	 * Create one Map to assign numeric value to predefined categories.
+	 */
+	static final Map<String, Double> Category = new HashMap<String, Double>() {
+		{
+			put("JobFailure", 1.0);
+			put("Maxrun", 2.0);
+			put("Capacity", 3.0);
+			put("ProcessBadMessage", 4.0);
+			put("EMS", 5.0);
+			put("", 0.0);
+		}
+	};
+
+	public static void main(String[] args) throws UnknownHostException {
+
+		SparkConf sparkConf = new SparkConf().setAppName("AlertsDTreeMultiColumns")
+				.setMaster("local[2]")
+				.set("spark.driver.allowMultipleContexts", "true");
+				//.set("spark.driver.host", "zeus07")
+				//.set("spark.driver.port", "8080
+		JavaSparkContext sc = new JavaSparkContext(sparkConf);
+
+		/*
+		 * Load Trained CSV file
+		 */
+		JavaRDD<String> trainFile = sc
+				.textFile("sample_autosys.csv");
+
+		// convert to JavaPair with a map between category and alert details
+
+		JavaRDD<AlertBean> rowsTrainRDD = trainFile
+				.map(new Function<String, AlertBean>() {
+					public AlertBean call(String line) {
+						//System.out.println("line######################"+line);
+						String[] data = line.split(",");
+						//System.out.println("data######################"+data[2]);
+						Double points = new Double(0);
+						if (data[9] != null && data[9].trim().length() != 0) {
+							try {
+								points = new Double(data[9].trim());
+							} catch (Exception e) {
+								//System.out.println("points#######"+data[8].trim()+"#########"+e.getMessage());
+								return null;
+							}
+						}
+						
+						return new AlertBean(data[0], data[1], data[2],
+								data[3], data[4], data[5], data[6], data[7],data[8],
+								points);
+					}
+
+				});
+
+		// to filter the header from CSV
+		JavaRDD<AlertBean> rowsValuesTrainRDD = rowsTrainRDD
+				.filter(new Function<AlertBean, Boolean>() {
+					public Boolean call(AlertBean bean) throws Exception {
+						if (bean == null) {
+							//System.out.println("Bean False######################");
+							return false;
+						} else {
+							//System.out.println("Bean False######################");
+							return true;
+							
+						}
+					}
+
+				});
+
+		//check bean != null
+		// Need list of all words for creating trained model in Word2Vec
+		JavaRDD<List<String>> trainRdds = rowsValuesTrainRDD
+				.map(new Function<AlertBean, List<String>>() {
+					public List<String> call(AlertBean bean) throws Exception {
+						// multiple columns to be trained
+						String alertDt = clean(bean.getAlertDetail());
+						//System.out.println("alertDt######################"+alertDt);
+						String appName = clean(bean.getApplicationName());
+						//System.out.println(appName);
+						String npoints = bean.getNpoints().toString();
+						String[] words = ArrayUtils.addAll(
+								ArrayUtils.addAll(alertDt.split(" "),
+										appName.split(" ")), npoints.split(" "));
+						return Arrays.asList(words);
+
+					}
+
+				});
+
+		Word2Vec word2Vec = new Word2Vec();
+		Word2VecModel model = word2Vec.fit(trainRdds);
+
+		JavaRDD<LabeledPoint> trainPoints = rowsValuesTrainRDD
+				.map(new Function<AlertBean, LabeledPoint>() {
+
+					
+					public LabeledPoint call(AlertBean bean) throws Exception {
+						String alertDt = clean(bean.getAlertDetail());
+						String appName = clean(bean.getApplicationName());
+						String npoints = bean.getNpoints().toString();
+						String[] words = ArrayUtils.addAll(
+								ArrayUtils.addAll(alertDt.split(" "),
+										appName.split(" ")), npoints.split(" "));
+						return new LabeledPoint(
+								Category.get(bean.getCategory()), wordToVector(
+										words, model));
+
+					}
+
+				});
+
+		JavaRDD<String> testFile = sc
+				.textFile("/root/kafka/kafka-consumer/decisiontree/test_data2.csv");
+
+		@SuppressWarnings("serial")
+		JavaRDD<AlertBean> rowsTestRDD = testFile
+				.map(new Function<String, AlertBean>() {
+					public AlertBean call(String line) {
+						String[] data = line.split(",");
+						Double points = new Double(0);
+						if (data[9] != null && data[9].trim().length() != 0) {
+							try {
+								points = new Double(data[9].trim());
+							} catch (Exception e) {
+								return null;
+							}
+						}
+						return new AlertBean(data[0], data[1], data[2],
+								data[3], data[4], data[5], data[6], data[7],data[8],
+								points);
+					}
+
+				});
+
+		// to filter the header from CSV
+		JavaRDD<AlertBean> rowsValuesTestRDD = rowsTestRDD
+				.filter(new Function<AlertBean, Boolean>() {
+					@Override
+					public Boolean call(AlertBean bean) throws Exception {
+						if (bean == null) {
+							return false;
+						} else {
+							return true;
+						}
+					}
+
+				});
+
+		JavaPairRDD<String, LabeledPoint> testPoints = rowsValuesTestRDD
+				.mapToPair(new PairFunction<AlertBean, String, LabeledPoint>() {
+					@Override
+					public Tuple2<String, LabeledPoint> call(AlertBean bean)
+							throws Exception {
+						// considering multiple columns for model
+						String alertDt = clean(bean.getAlertDetail());
+						String appName = clean(bean.getApplicationName());
+						String npoints = bean.getNpoints().toString();
+						String[] words = ArrayUtils.addAll(
+								ArrayUtils.addAll(alertDt.split(" "),
+										appName.split(" ")), npoints.split(" "));
+
+						return new Tuple2<String, LabeledPoint>(bean.getAlertDetail(),
+								new LabeledPoint(0.0,
+										wordToVector(words, model)));
+
+					}
+
+				});
+
+		
+		
+		/*
+		 * this value depends on the Hashmap size for predefined categories
+		 */
+		Integer numClasses = 10; 
+		/* empty value means features are dynamic*/
+		Map<Integer, Integer> categoricalFeaturesInfo = new HashMap<Integer, Integer>(); 
+		String impurity = "gini";
+		Integer maxDepth = 7;
+		/*
+		 * more value makes to consider more split valuesfor fine-grained split decisions
+		 */
+		Integer maxBins = 50; 
+		
+		// Train a DecisionTree model for classification.
+		final DecisionTreeModel dTreeModel = DecisionTree.trainClassifier(
+				trainPoints, numClasses, categoricalFeaturesInfo, impurity,
+				maxDepth, maxBins);
+
+		JavaPairRDD<String, Double> predictionAndLabel = testPoints
+				.mapToPair(new PairFunction<Tuple2<String, LabeledPoint>, String, Double>() {
+					@Override
+					public Tuple2<String, Double> call(
+							Tuple2<String, LabeledPoint> tuple) {
+						// System.out.println("After prediction "+model.predict(tuple._2.features()));
+						return new Tuple2<String, Double>(tuple._1, dTreeModel
+								.predict(tuple._2.features()));
+					}
+				});
+
+		List<Tuple2<String, Double>> alertCategoryList = predictionAndLabel
+				.collect();
+
+		for (Tuple2<String, Double> tuple : alertCategoryList) {
+			System.out.println("Alert :" + tuple._1 + " , Category :"
+					+ getKeyByValue(tuple._2));
+		}
+
+	}
+
+	public static String getKeyByValue(Double value) {
+		for (Entry<String, Double> entry : Category.entrySet()) {
+			if (value.doubleValue() == entry.getValue().doubleValue()) {
+				return entry.getKey();
+			}
+		}
+		return null;
+	}
+
+	public static double[] sumArray(double[] m, double[] n) {
+		for (int i = 0; i < m.length; i++) {
+			m[i] = m[i] + n[i];
+		}
+
+		return m;
+	}
+
+	// This is to calculate the average of vectors
+	public static double[] divArray(double[] m, double divisor) {
+		for (int i = 0; i < m.length; i++) {
+			m[i] = m[i] / divisor;
+		}
+		return m;
+	}
+
+	public static Vector wordToVector(String w, Word2VecModel model) {
+		try {
+			return model.transform(w);
+		} catch (Exception e) {
+			return Vectors.zeros(100);
+		}
+	}
+
+	public static Vector wordToVector(String[] ws, Word2VecModel model) {
+		double[] totalSum = wordToVector(ws[0], model).toArray();
+		for (int i = 1; i < ws.length; i++) {
+			totalSum = sumArray(totalSum, wordToVector(ws[i], model).toArray());
+
+		}
+		divArray(totalSum, ws.length);
+		return new DenseVector(divArray(totalSum, ws.length));
+
+	}
+	
+	/* clean the punctuation, stop words and numbers, remove extra space
+	 *	and convert to lower case
+	 */
+	public static String clean(String a){
+		if(a != null){
+			return a.replaceAll("[^a-zA-Z\\s]", "").replaceAll("\\s+", " ").toLowerCase();
+		}else{
+			return "";
+		}
+			
+	}
+
+}
+
+
+--------------
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>Classification</groupId>
+	<artifactId>Classification</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<build>
+		<sourceDirectory>src</sourceDirectory>
+		<plugins>
+			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.1</version>
+				<configuration>
+					<source>1.8</source>
+					<target>1.8</target>
+				</configuration>
+			</plugin>
+      			 <plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.2.1</version>
+				<executions>
+					<execution>
+						<id>gs-poc</id>
+						<phase>test</phase>
+						<goals>
+							<goal>java</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<mainClass>com.infy.gs.automation.client.AlertsDTreeMultiColumns</mainClass>
+					<executable>java</executable>
+					<arguments>
+						<argument>-classpath</argument>
+						<argument>target/classes</argument>
+						<argument>com.infy.gs.automation.client.AlertsDTreeMultiColumns</argument>
+					</arguments>
+				</configuration>
+			</plugin>  
+		</plugins>
+	</build>
+	<dependencies>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
+<dependency>
+	<groupId>com.google.code.gson</groupId>
+	<artifactId>gson</artifactId>
+	<version>2.3.1</version>
+</dependency>
+
+	
+		<dependency>
+			<groupId>com.googlecode.json-simple</groupId>
+			<artifactId>json-simple</artifactId>
+			<version>1.1.1</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-core_2.10</artifactId>
+			<version>1.3.1</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.10</artifactId>
+            <version>1.3.1</version>
+        </dependency>
+		
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-mllib_2.10</artifactId>
+			<version>1.3.1</version>
+		</dependency>
+		
+		<!-- MongoDB -->
+		
+		  <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>casbah-commons_2.10</artifactId>
+        <version>2.8.0</version>
+    </dependency>
+  <dependency>
+	<groupId>org.mongodb</groupId>
+	<artifactId>mongo-java-driver</artifactId>
+	<version>2.13.0</version>
+</dependency>
+
+    
+    <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>casbah-query_2.10</artifactId>
+        <version>2.8.0</version>
+    </dependency>
+    <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>casbah-core_2.10</artifactId>
+        <version>2.8.0</version>
+    </dependency>
+    <dependency>
+        <groupId>de.flapdoodle.embed</groupId>
+        <artifactId>de.flapdoodle.embed.mongo</artifactId>
+        <version>1.46.4</version>
+        <scope>test</scope>
+    </dependency>
+		<dependency>
+	<groupId>org.mongodb</groupId>
+	<artifactId>mongo-hadoop-core</artifactId>
+	<version>1.3.0</version>
+</dependency>
+		
+			
+		
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-streaming_2.10</artifactId>
+			<version>1.3.1</version>	
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+			</exclusions>		
+		</dependency>
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-streaming-kafka_2.10</artifactId>
+			<version>1.3.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-cli</groupId>
+			<artifactId>commons-cli</artifactId>
+			<version>1.2</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-logging</groupId>
+			<artifactId>commons-logging</artifactId>
+			<version>1.1.3</version>
+		</dependency>
+		<dependency>
+			<groupId>net.sf.jopt-simple</groupId>
+			<artifactId>jopt-simple</artifactId>
+			<version>3.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>14.0.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-framework</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-log4j12</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-recipes</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+			</exclusions>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-test</artifactId>
+			<version>2.6.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.testng</groupId>
+					<artifactId>testng</artifactId>
+				</exclusion>
+			</exclusions>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka_2.10</artifactId>
+			<version>0.8.1.1</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.zookeeper</groupId>
+					<artifactId>zookeeper</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>1.7.4</version>
+		</dependency>
+<dependency>
+	<groupId>org.scala-lang</groupId>
+	<artifactId>scala-library</artifactId>
+	<version>2.10.4</version>
+</dependency>
+
+		<dependency>
+			<groupId>com.msiops.footing</groupId>
+			<artifactId>footing-tuple</artifactId>
+			<version>0.2</version>
+		</dependency>
+
+	</dependencies>
+
+</project>
+
+
+------------
